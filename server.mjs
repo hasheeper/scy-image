@@ -81,7 +81,6 @@ function clamp(value, fallback, min, max, integer = false) {
    placeholder for every parameter shape tested, so they are not offered. */
 function buildPayload(input) {
   const prompt = String(input.prompt || "").trim();
-  if (!prompt) throw new Error("Prompt 不能为空");
 
   const model = String(input.model || "").trim();
   if (!/^nai-[a-zA-Z0-9._-]{2,80}$/.test(model)) throw new Error("仅支持 NAI 模型");

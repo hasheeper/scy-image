@@ -137,12 +137,12 @@
         <div class="composer-scroll">
           <div class="fld fld-hero">
             <div class="fld-top">
-              <label for="prompt">描述</label>
+              <label for="prompt">描述（可选）</label>
               <button class="ibtn ibtn-xs" id="exampleBtn" type="button" data-tip="填入示例" aria-label="填入示例">
                 <svg class="ico"><use href="#i-wand" /></svg>
               </button>
             </div>
-            <textarea id="prompt" placeholder="silver hair, moonlit garden, cinematic lighting…" required spellcheck="false"></textarea>
+            <textarea id="prompt" placeholder="可留空，或填写 silver hair, moonlit garden…" spellcheck="false"></textarea>
             <div class="fld-foot"><span id="promptCount">0</span></div>
           </div>
 
@@ -229,7 +229,7 @@
         <div class="composer-foot">
           <button class="btn btn-primary btn-go" id="goBtn" type="submit">
             <svg class="ico"><use href="#i-sparkle" /></svg>
-            <span id="goLabel">生成</span>
+            <span id="goLabel">生成 ×1</span>
             <kbd>⌘↵</kbd>
           </button>
           <button class="btn btn-quiet btn-block btn-sm" id="cancelBtn" type="button" hidden>
@@ -265,7 +265,7 @@
           <div class="layer center" data-layer="empty">
             <div class="blank">
               <svg class="ico ico-xl"><use href="#i-image" /></svg>
-              <p class="blank-s">写下描述，按 <kbd>⌘↵</kbd> 生成</p>
+              <p class="blank-s">可直接生成，或填写描述后按 <kbd>⌘↵</kbd></p>
             </div>
           </div>
 

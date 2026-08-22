@@ -313,8 +313,13 @@ function commitBatchCount() {
   const n = batchCount();
   $("batchCount").value = String(n);
   syncAdvBadge();
+  syncGenerateLabel();
   persist();
   return n;
+}
+
+function syncGenerateLabel() {
+  if (!jobActive) $("goLabel").textContent = `生成 ×${batchCount()}`;
 }
 
 /* ── prefs ─────────────────────────────────────────────────── */
@@ -455,7 +460,9 @@ function showEntry(item) {
   ].filter(Boolean).join(" · ");
 
   setState("done");
-  for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = false;
+  $("saveBtn").hidden = false;
+  $("reuseBtn").hidden = false;
+  $("copyBtn").hidden = !item.params?.prompt;
   renderGallery();
 }
 
@@ -661,7 +668,8 @@ function startTimer() {
 
 function setBusy(on) {
   $("goBtn").disabled = on;
-  $("goLabel").textContent = on ? "生成中…" : "生成";
+  if (on) $("goLabel").textContent = `准备 ×${batchCount()}`;
+  else syncGenerateLabel();
   $("cancelBtn").hidden = !on;
   $("form").setAttribute("aria-busy", String(on));
   if (on) for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = true;
@@ -680,8 +688,8 @@ async function runBatch(base) {
       const params = paramsForBatchItem(base, index, total);
       controller = new AbortController();
       setState("busy");
-      $("goLabel").textContent = total > 1 ? `生成 ${index + 1}/${total}` : "生成中…";
-      $("stageTitle").textContent = total > 1 ? `串行生成 ${index + 1}/${total}` : "生成中";
+      $("goLabel").textContent = `剩余 ×${total - index}`;
+      $("stageTitle").textContent = total > 1 ? `串行生成 · 剩余 ×${total - index}` : "生成中";
       $("stageSub").textContent = completed ? `已完成 ${completed}/${total}` : "";
       $("busyNote").textContent = [
         `${params.width}×${params.height}`,
@@ -786,7 +794,6 @@ async function run() {
 
   commitBatchCount();
   const params = collect();
-  if (!params.prompt) { toast("请先写下画面描述"); $("prompt").focus(); return; }
   if (!params.model) { toast("模型列表未就绪"); return; }
   if (params.batchCount > 1 && !params.localHistory) {
     toast("串行批量需要开启「加入历史」，否则前面的结果无法保留");
@@ -857,7 +864,7 @@ for (const id of ["optimize", "serverCache", "localCache"]) {
   $(id).addEventListener("change", () => { syncAdvBadge(); persist(); });
 }
 $("seed").addEventListener("input", () => { syncAdvBadge(); persistSoon(); });
-$("batchCount").addEventListener("input", () => { syncAdvBadge(); persistSoon(); });
+$("batchCount").addEventListener("input", () => { syncAdvBadge(); syncGenerateLabel(); persistSoon(); });
 $("batchCount").addEventListener("change", commitBatchCount);
 $("batchCount").addEventListener("keydown", (event) => {
   if (event.key === "Enter") { event.preventDefault(); commitBatchCount(); }
@@ -878,7 +885,7 @@ $("resetAdv").addEventListener("click", () => {
   $("optimize").checked = DEFAULTS.optimize;
   $("serverCache").checked = DEFAULTS.serverCache;
   $("localCache").checked = DEFAULTS.localCache;
-  syncRangeLabels(); syncAdvBadge(); persist();
+  syncRangeLabels(); syncAdvBadge(); syncGenerateLabel(); persist();
 });
 
 $("exampleBtn").addEventListener("click", () => {
@@ -926,7 +933,7 @@ $("reuseBtn").addEventListener("click", () => {
   $("batchCount").value = Math.min(BATCH_MAX, Math.max(1, p.batchTotal || p.batchCount || 1));
   customMode = !RATIOS.some((r) => !r.custom && r.w === p.width && r.h === p.height);
   refreshHighlights();
-  syncRangeLabels(); syncModelHint(); syncAdvBadge(); syncPromptCount(); sizeSkeleton(); persist();
+  syncRangeLabels(); syncModelHint(); syncAdvBadge(); syncGenerateLabel(); syncPromptCount(); sizeSkeleton(); persist();
   toast("参数已回填", "ok");
 });
 
@@ -1137,6 +1144,7 @@ async function enterApp() {
   restore();
   syncRangeLabels();
   syncAdvBadge();
+  syncGenerateLabel();
   syncPromptCount();
   validateSize();
   renderGallery();
