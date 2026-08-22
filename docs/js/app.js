@@ -3,6 +3,7 @@ import { detectMode, fetchCatalog, generate, state as api, DEFAULT_MODEL, FALLBA
 import { history, prefs, makeThumb } from "./store.js";
 import { attach as attachHighlight } from "./highlight.js";
 import { attachTagAutocomplete } from "./tag-autocomplete.js";
+import { convertToNaiPrompt } from "./prompt-converter.js";
 
 const $ = (id) => document.getElementById(id);
 const body = document.body;
@@ -842,6 +843,28 @@ $("model").addEventListener("change", () => { syncModelHint(); persist(); });
 $("sampler").addEventListener("change", () => { syncAdvBadge(); persist(); });
 $("prompt").addEventListener("input", () => { syncPromptCount(); persistSoon(); });
 $("negative").addEventListener("input", persistSoon);
+document.querySelectorAll("[data-convert-prompt]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const textarea = $(button.dataset.convertPrompt);
+    const before = textarea.value;
+    if (!before.trim()) {
+      toast("没有可清洗内容");
+      return;
+    }
+    const converted = convertToNaiPrompt(before);
+    if (converted === before) {
+      toast("格式无需清洗", "ok");
+      return;
+    }
+    textarea.setRangeText(converted, 0, before.length, "end");
+    textarea.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      inputType: "insertReplacementText",
+      data: converted
+    }));
+    toast("格式已清洗", "ok");
+  });
+});
 
 
 

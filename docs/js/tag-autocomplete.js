@@ -242,6 +242,7 @@ export function attachTagAutocomplete(textarea, { maxResults = 20 } = {}) {
   const schedule = () => {
     clearTimeout(timer);
     if (composing) return;
+    if (document.activeElement !== textarea) { dismiss(); return; }
     const { query } = fragmentAtCaret(textarea);
     const minimum = hasHan(query) ? 1 : 2;
     if (query.length < minimum) { request?.abort(); setOpen(false); return; }

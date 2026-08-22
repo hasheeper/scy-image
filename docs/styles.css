@@ -152,6 +152,14 @@ select option { background: var(--c2); }
   transition: color var(--t1) var(--e);
 }
 .tag-dict-link:hover { color: var(--a); }
+.prompt-convert {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 22px; padding: 2px 6px;
+  color: var(--fg-4); border-radius: var(--r1); font-size: var(--fz-xs);
+  transition: color var(--t1) var(--e), background var(--t1) var(--e);
+}
+.prompt-convert .ico { width: 11px; height: 11px; }
+.prompt-convert:hover { color: var(--a); background: var(--a-dim); }
 .fld label, .slider-top label {
   font-size: var(--fz-sm); font-weight: 500;
   color: var(--fg-3);
@@ -1094,6 +1102,7 @@ body[data-zoom="on"] .lightbox img { transform: none; }
   .check { min-height: 32px; }
   input[type="range"] { height: 28px; }
   .ratio { padding: 10px 4px 8px; }
+  .prompt-convert { min-height: 28px; padding-inline: 7px; }
 
   .tag-suggest { padding: 4px; border-radius: 11px; }
   .tag-suggest-option { min-height: 44px; padding: 6px 8px; }

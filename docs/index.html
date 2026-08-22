@@ -45,6 +45,9 @@
         <symbol id="i-reset" viewBox="0 0 24 24">
           <path d="M4 12a8 8 0 1 0 8-8" /><path d="M12 7.5v5l3.5 2" />
         </symbol>
+        <symbol id="i-convert" viewBox="0 0 24 24">
+          <path d="M5 7h12m0 0-3-3m3 3-3 3M19 17H7m0 0 3 3m-3-3 3-3" />
+        </symbol>
         <symbol id="i-trash" viewBox="0 0 24 24">
           <path d="M5 7.5h14M9.5 7.5V5.5h5v2M7 7.5l.8 11a1.5 1.5 0 0 0 1.5 1.4h5.4a1.5 1.5 0 0 0 1.5-1.4l.8-11" />
         </symbol>
@@ -142,6 +145,9 @@
             <div class="fld-top">
               <label for="prompt">描述（可选）</label>
               <div class="fld-actions">
+                <button class="prompt-convert" type="button" data-convert-prompt="prompt" aria-label="清洗描述格式">
+                  <svg class="ico"><use href="#i-convert" /></svg>清洗格式
+                </button>
                 <a class="tag-dict-link" href="./tags.html" target="_blank" rel="noopener">Tag 词典</a>
               </div>
             </div>
@@ -150,7 +156,12 @@
           </div>
 
           <div class="fld">
-            <div class="fld-top"><label for="negative">排除</label></div>
+            <div class="fld-top">
+              <label for="negative">排除</label>
+              <button class="prompt-convert" type="button" data-convert-prompt="negative" aria-label="清洗排除词格式">
+                <svg class="ico"><use href="#i-convert" /></svg>清洗格式
+              </button>
+            </div>
             <textarea id="negative" rows="2" placeholder="lowres, blurry, watermark…" autocomplete="off" spellcheck="false"></textarea>
           </div>
 
