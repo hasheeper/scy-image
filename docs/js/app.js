@@ -28,6 +28,9 @@ const DEFAULTS = {
 /* True when the size matches no preset, or the user picked the custom card. */
 let customMode = false;
 
+/* Set when we navigate away deliberately, so the unload guard stays quiet. */
+let suppressUnloadGuard = false;
+
 /* Weight-highlight mirrors; call after setting a textarea's value in code. */
 let refreshPromptHL = () => {};
 let refreshNegativeHL = () => {};
@@ -419,12 +422,14 @@ function showEntry(item) {
     Number.isFinite(item.ms) ? `${(item.ms / 1000).toFixed(1)}s` : ""
   ].filter(Boolean);
   $("stageSub").textContent = bits.join("  ·  ");
+  // Deliberately excludes seed: stageSub above already shows it, and the
+  // duplicate was long enough to wrap this strip onto several lines on phones.
   $("printMeta").textContent = [
     item.params?.sampler,
     `${item.params?.steps} steps`,
     `cfg ${item.params?.cfg}`,
-    item.params?.seed != null ? `seed ${item.params.seed}` : ""
-  ].filter(Boolean).join("   ");
+    `scale ${item.params?.scale}`
+  ].filter(Boolean).join(" · ");
 
   setState("done");
   for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = false;
@@ -630,6 +635,8 @@ $("reuseBtn").addEventListener("click", () => {
 });
 
 $("clearHist").addEventListener("click", () => {
+  const n = history.size;
+  if (n && !confirm(`清空 ${n} 张图片？此操作无法撤销。`)) return;
   history.clear();
   for (const [, url] of urls) URL.revokeObjectURL(url);
   urls.clear();
@@ -677,13 +684,26 @@ document.addEventListener("keydown", (e) => {
 $("lockButton").addEventListener("click", () => {
   // Session mode has no passphrase, so locking discards the key entirely and
   // the user must paste it again. Say so before doing it.
-  if (vault.mode() === "session" && !confirm("仅本标签页模式没有口令，锁定会清除 Key，需要重新填写。继续？")) return;
+  const warnings = [];
+  if (vault.mode() === "session") warnings.push("本模式没有口令，Key 将被清除，需要重新填写");
+  if (history.size) warnings.push(`本次的 ${history.size} 张图片将丢失`);
+  if (warnings.length && !confirm(`锁定并重载页面：\n\n· ${warnings.join("\n· ")}\n\n继续？`)) return;
+  suppressUnloadGuard = true;
   vault.lock();
   location.reload();
 });
 
 /* Flush any debounced write before the page goes away, so refreshing right
    after typing cannot lose the last few hundred milliseconds. */
+/* History lives in memory only, so a reload destroys it. Warn while there is
+   something to lose. Browsers ignore custom text and show their own prompt;
+   they also require a prior user interaction, so this cannot nag on load. */
+addEventListener("beforeunload", (event) => {
+  if (suppressUnloadGuard || !history.size) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
+
 addEventListener("pagehide", () => { clearTimeout(persistTimer); persist(); });
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { clearTimeout(persistTimer); persist(); }

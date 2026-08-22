@@ -751,11 +751,16 @@ body[data-state="done"] .layer[data-layer="image"] {
    lightbox for a closer look, which replaces the old 1:1 toggle. */
 
 /* metadata rides on the print, only on hover */
+/* Single line, clipped rather than wrapped: the gradient behind it is sized
+   for one line, so wrapping pushed text out of the scrim and onto the image. */
 .print-meta {
   position: absolute; left: 0; right: 0; bottom: 0;
   padding: 20px var(--s3) 8px;
   color: rgba(255,255,255,0.78);
-  background: linear-gradient(to top, rgba(0,0,0,0.72), transparent);
+  background: linear-gradient(to top, rgba(0,0,0,0.74), transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   opacity: 0;
   transform: translateY(4px);
   transition: opacity var(--t2) var(--e), transform var(--t2) var(--e);
@@ -1040,9 +1045,18 @@ body[data-zoom="on"] .lightbox img { transform: none; }
 @media (max-width: 480px) {
   .ratios { grid-template-columns: repeat(4, 1fr); gap: 5px; }
   .pair { grid-template-columns: 1fr 1fr; }
-  .stage-id span { display: none; }
   .viewport { height: min(52dvh, 380px); }
   .seg { grid-auto-flow: row; }
+
+  /* Stack the title and its metadata: side by side they collided, and hiding
+     the metadata (the previous fix) meant the seed was unreadable on phones. */
+  .stage-head { height: auto; padding: var(--s2) var(--s3); align-items: flex-start; }
+  .stage-id { flex-direction: column; align-items: flex-start; gap: 1px; }
+  .stage-id strong { font-size: var(--fz-sm); }
+  .stage-id span { max-width: 100%; }
+
+  /* The on-image strip duplicates what is now legible above it. */
+  .print-meta { display: none; }
 }
 
 /* Tooltips are hover-only affordances; on touch they fire on tap and linger,
