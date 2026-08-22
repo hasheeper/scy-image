@@ -13,7 +13,8 @@
    thumbnails at 40 items reached ~218 MB and got the tab killed. History now
    stores a small JPEG thumbnail for the rail and keeps the full blob only for
    the current image + downloads. */
-const MAX_ITEMS = 24;
+/* One full 24-image batch can also contribute its generated comparison sheet. */
+const MAX_ITEMS = 25;
 const THUMB_EDGE = 240;
 const LEGACY_DB = "scy-image-studio";
 

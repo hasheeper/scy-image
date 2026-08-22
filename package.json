@@ -6,7 +6,7 @@
   "description": "Local web UI for ScyllaProxy NAI image generation",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check public/app.js"
+    "check": "node --check server.mjs && node --check docs/js/app.js && node --check docs/js/api.js && node --check docs/js/highlight.js && node --check docs/js/store.js && node --check docs/js/vault.js"
   },
   "engines": {
     "node": ">=18"

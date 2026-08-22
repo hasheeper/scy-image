@@ -1,7 +1,7 @@
 /**
  * Optional local dev server.
  *
- * Serves public/ and, when config/api-key.txt is filled in, proxies the API so
+ * Serves docs/ and, when config/api-key.txt is filled in, proxies the API so
  * the token never reaches the browser. The site also runs as a pure static
  * bundle (GitHub Pages) where the browser talks to the upstream directly —
  * this file is a convenience for local use, not a requirement.
@@ -18,6 +18,12 @@ const KEY_FILE = path.join(ROOT, "config", "api-key.txt");
 const UPSTREAM = "https://proxy.scylla.love";
 const PORT = Number.parseInt(process.env.PORT || "3215", 10);
 const HOST = "127.0.0.1";
+
+/* One upstream image request at a time per local server process. Scylla does
+   not publish a concurrency contract, and running the same key in parallel
+   can otherwise happen through two tabs or API clients. The browser also has
+   an origin-scoped Web Lock; this is the final guard for proxy mode. */
+let generationActive = false;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -102,11 +108,27 @@ function buildPayload(input) {
 }
 
 async function proxyGenerate(req, res) {
+  if (generationActive) {
+    res.writeHead(429, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Retry-After": "2"
+    });
+    res.end(JSON.stringify({ error: "已有生成任务正在进行，请等待完成后重试" }));
+    return;
+  }
+
+  generationActive = true;
+  let controller = null;
   try {
     const [token, input] = await Promise.all([readToken(), readBody(req)]);
     const payload = buildPayload(input);
 
-    const controller = new AbortController();
+    controller = new AbortController();
+    req.once("aborted", () => controller?.abort());
+    res.once("close", () => {
+      if (!res.writableEnded) controller?.abort();
+    });
     const timer = setTimeout(() => controller.abort(), 240_000);
 
     let upstream;
@@ -143,7 +165,9 @@ async function proxyGenerate(req, res) {
     res.end(data);
   } catch (error) {
     const message = error?.name === "AbortError" ? "生成超时，请稍后重试" : error.message;
-    json(res, 400, { error: message || "生成失败" });
+    if (!res.destroyed && !res.writableEnded) json(res, 400, { error: message || "生成失败" });
+  } finally {
+    generationActive = false;
   }
 }
 
@@ -189,7 +213,12 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/status") {
     let configured = false;
     try { await readToken(); configured = true; } catch { /* not configured */ }
-    return json(res, 200, { proxy: true, configured });
+    return json(res, 200, {
+      proxy: true,
+      configured,
+      generationLock: true,
+      generationBusy: generationActive
+    });
   }
 
   if (req.method === "GET" && url.pathname === "/api/image/models") return proxyModels(res);

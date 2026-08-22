@@ -18,11 +18,14 @@ const RATIOS = [
 const SNAP = 64;
 const DIM_MIN = 64;
 const DIM_MAX = 2048;
+const BATCH_MAX = 24;
+const UINT32_RANGE = 4_294_967_296;
+const GENERATION_LOCK = "scylla-image-generation-v1";
 
 const DEFAULTS = {
   sampler: "k_euler_ancestral",
   steps: 25, scale: 5, cfg: 10,
-  optimize: false, serverCache: false, localCache: true
+  batchCount: 1, optimize: false, serverCache: false, localCache: true
 };
 
 /* True when the size matches no preset, or the user picked the custom card. */
@@ -40,6 +43,8 @@ let catalog = { models: [], samplers: [], defaults: {} };
 let controller = null;
 let ticker = null;
 let current = null;
+let jobActive = false;
+let cancelRequested = false;
 const urls = new Map();
 
 /* ── toast ─────────────────────────────────────────────────── */
@@ -279,6 +284,7 @@ function syncAdvBadge() {
   if (Number($("scale").value) !== DEFAULTS.scale) n += 1;
   if (Number($("cfg").value) !== DEFAULTS.cfg) n += 1;
   if ($("seed").value.trim() !== "") n += 1;
+  if (batchCount() !== DEFAULTS.batchCount) n += 1;
   if ($("optimize").checked !== DEFAULTS.optimize) n += 1;
   if ($("serverCache").checked !== DEFAULTS.serverCache) n += 1;
   if ($("localCache").checked !== DEFAULTS.localCache) n += 1;
@@ -298,6 +304,19 @@ function syncPromptCount() {
   $("promptCount").textContent = String($("prompt").value.length);
 }
 
+function batchCount() {
+  const n = Math.floor(Number($("batchCount").value));
+  return Number.isFinite(n) ? Math.min(BATCH_MAX, Math.max(1, n)) : DEFAULTS.batchCount;
+}
+
+function commitBatchCount() {
+  const n = batchCount();
+  $("batchCount").value = String(n);
+  syncAdvBadge();
+  persist();
+  return n;
+}
+
 /* ── prefs ─────────────────────────────────────────────────── */
 function persist() {
   prefs.save({
@@ -307,6 +326,7 @@ function persist() {
     width: Number($("width").value), height: Number($("height").value),
     steps: Number($("steps").value), scale: Number($("scale").value), cfg: Number($("cfg").value),
     seed: $("seed").value,
+    batchCount: batchCount(),
     optimize: $("optimize").checked, serverCache: $("serverCache").checked,
     localCache: $("localCache").checked
   });
@@ -329,6 +349,7 @@ function restore() {
   if (s.scale != null) $("scale").value = s.scale;
   if (s.cfg != null) $("cfg").value = s.cfg;
   if (s.seed != null) $("seed").value = s.seed;
+  if (s.batchCount != null) $("batchCount").value = Math.min(BATCH_MAX, Math.max(1, Math.floor(Number(s.batchCount)) || 1));
   $("optimize").checked = s.optimize ?? DEFAULTS.optimize;
   $("serverCache").checked = s.serverCache ?? DEFAULTS.serverCache;
   $("localCache").checked = s.localCache ?? DEFAULTS.localCache;
@@ -347,7 +368,9 @@ function typicalMs(items) {
 function renderGallery() {
   const items = history.all();
   const tray = $("tray");
-  const seen = new Set();
+  // Keep the current non-history result alive as well. Without this, turning
+  // off "加入历史" revoked its object URL as soon as the gallery rerendered.
+  const seen = new Set(current?.id ? [current.id] : []);
 
   tray.innerHTML = "";
   $("histCount").textContent = String(items.length);
@@ -441,7 +464,7 @@ function collect() {
   const model = activeModel();
   const raw = $("seed").value.trim();
   const seed = raw === ""
-    ? Math.floor(Math.random() * 4_294_967_295)
+    ? randomSeed()
     : Math.min(4_294_967_295, Math.max(0, Math.floor(Number(raw))));
 
   return {
@@ -456,10 +479,176 @@ function collect() {
     scale: Number($("scale").value),
     cfg: Number($("cfg").value),
     seed,
+    randomSeed: raw === "",
+    batchCount: batchCount(),
+    localHistory: $("localCache").checked,
     optimize: $("optimize").checked,
     cache: $("serverCache").checked,
     transform_prompt: false
   };
+}
+
+function randomSeed() {
+  if (globalThis.crypto?.getRandomValues) {
+    return crypto.getRandomValues(new Uint32Array(1))[0];
+  }
+  return Math.floor(Math.random() * UINT32_RANGE);
+}
+
+function paramsForBatchItem(base, index, total) {
+  return {
+    ...base,
+    seed: base.randomSeed ? randomSeed() : (base.seed + index) % UINT32_RANGE,
+    batchIndex: index + 1,
+    batchTotal: total
+  };
+}
+
+function comparisonColumns(total) {
+  if (total <= 2) return total;
+  if (total === 3) return 3;
+  if (total <= 4) return 2;
+  if (total <= 9) return 3;
+  if (total <= 16) return 4;
+  return 5;
+}
+
+async function drawBlobContained(ctx, blob, x, y, width, height) {
+  let source = null;
+  let release = () => {};
+
+  if (typeof createImageBitmap === "function") {
+    try {
+      source = await createImageBitmap(blob);
+      release = () => source.close?.();
+    } catch {
+      source = null;
+    }
+  }
+
+  if (!source) {
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+    image.src = url;
+    try {
+      if (image.decode) await image.decode();
+      else await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error("图片解码失败"));
+      });
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+    source = image;
+    release = () => URL.revokeObjectURL(url);
+  }
+
+  try {
+    const scale = Math.min(width / source.width, height / source.height);
+    const drawWidth = Math.max(1, Math.round(source.width * scale));
+    const drawHeight = Math.max(1, Math.round(source.height * scale));
+    const drawX = x + Math.round((width - drawWidth) / 2);
+    const drawY = y + Math.round((height - drawHeight) / 2);
+    ctx.drawImage(source, drawX, drawY, drawWidth, drawHeight);
+  } finally {
+    release();
+  }
+}
+
+function canvasBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("浏览器未能编码对比图"));
+    }, "image/png");
+  });
+}
+
+async function makeComparison(records, base) {
+  const total = records.length;
+  const columns = comparisonColumns(total);
+  const rows = Math.ceil(total / columns);
+  const padding = 24;
+  const gap = 12;
+  const headerHeight = 76;
+  const cellWidth = Math.min(
+    480,
+    Math.floor((2048 - padding * 2 - gap * (columns - 1)) / columns)
+  );
+  const cellHeight = Math.max(1, Math.round(cellWidth * base.height / base.width));
+  const width = padding * 2 + columns * cellWidth + (columns - 1) * gap;
+  const height = padding * 2 + headerHeight + rows * cellHeight + (rows - 1) * gap;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) throw new Error("当前浏览器不支持 Canvas 合成");
+
+  ctx.fillStyle = "#0a0a0c";
+  ctx.fillRect(0, 0, width, height);
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#f2f1f4";
+  ctx.font = '600 25px ui-sans-serif, -apple-system, "PingFang SC", sans-serif';
+  ctx.fillText(`串行批量 · ${total} 张对比`, padding, padding);
+  ctx.fillStyle = "#8e8d98";
+  ctx.font = '14px ui-monospace, "SFMono-Regular", Menlo, monospace';
+  ctx.fillText(
+    `${base.modelName || base.model} · ${base.width}×${base.height} · ${base.steps} steps · ${base.sampler}`,
+    padding,
+    padding + 38,
+    width - padding * 2
+  );
+
+  for (let index = 0; index < total; index += 1) {
+    if (cancelRequested) throw new DOMException("已取消", "AbortError");
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const x = padding + column * (cellWidth + gap);
+    const y = padding + headerHeight + row * (cellHeight + gap);
+    ctx.fillStyle = "#16161b";
+    ctx.fillRect(x, y, cellWidth, cellHeight);
+    await drawBlobContained(ctx, records[index].blob, x, y, cellWidth, cellHeight);
+
+    const labelHeight = Math.min(36, Math.max(28, Math.round(cellHeight * 0.08)));
+    ctx.fillStyle = "rgba(7, 7, 9, 0.78)";
+    ctx.fillRect(x, y + cellHeight - labelHeight, cellWidth, labelHeight);
+    ctx.fillStyle = "#f2f1f4";
+    ctx.font = '600 14px ui-monospace, "SFMono-Regular", Menlo, monospace';
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      `#${index + 1}  ·  seed ${records[index].params.seed}`,
+      x + 11,
+      y + cellHeight - labelHeight / 2,
+      cellWidth - 22
+    );
+    ctx.textBaseline = "top";
+  }
+
+  return { blob: await canvasBlob(canvas), size: { width, height } };
+}
+
+async function addComparison(records, base) {
+  const { blob, size } = await makeComparison(records, base);
+  const params = {
+    ...base,
+    modelName: `串行对比 · ${records.length} 张`,
+    seed: null,
+    seedStart: base.randomSeed ? null : base.seed,
+    randomSeed: false,
+    isComparison: true,
+    comparisonTotal: records.length,
+    batchTotal: records.length
+  };
+  const thumb = await makeThumb(blob);
+  return history.add({
+    blob,
+    params,
+    size,
+    ms: records.reduce((sum, item) => sum + (Number(item.ms) || 0), 0),
+    thumbUrl: thumb ? URL.createObjectURL(thumb) : null
+  });
 }
 
 function startTimer() {
@@ -474,64 +663,159 @@ function setBusy(on) {
   $("goBtn").disabled = on;
   $("goLabel").textContent = on ? "生成中…" : "生成";
   $("cancelBtn").hidden = !on;
+  $("form").setAttribute("aria-busy", String(on));
   if (on) for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = true;
 }
 
-async function run() {
-  if (!validateSize()) return;
-
-  const params = collect();
-  if (!params.prompt) { toast("请先写下画面描述"); $("prompt").focus(); return; }
-  if (!params.model) { toast("模型列表未就绪"); return; }
-
-  sizeSkeleton();
-
+async function runBatch(base) {
+  const total = base.batchCount;
   const typical = typicalMs(history.all());
-  $("busyNote").textContent = typical
-    ? `${params.width}×${params.height} · 通常约 ${(typical / 1000).toFixed(0)}s`
-    : `${params.width}×${params.height} · ${params.modelName}`;
-
-  controller = new AbortController();
-  setState("busy");
-  setBusy(true);
-  $("stageTitle").textContent = "生成中";
-  $("stageSub").textContent = "";
+  let completed = 0;
+  const completedRecords = [];
   startTimer();
-
   try {
-    const { blob, size, ms } = await generate(params, { signal: controller.signal });
+    for (let index = 0; index < total; index += 1) {
+      if (cancelRequested) throw new DOMException("已取消", "AbortError");
 
-    // Decode first so the picture never appears half-painted.
-    const probe = new Image();
-    const tmp = URL.createObjectURL(blob);
-    probe.src = tmp;
-    if (probe.decode) await probe.decode().catch(() => {});
-    URL.revokeObjectURL(tmp);
+      const params = paramsForBatchItem(base, index, total);
+      controller = new AbortController();
+      setState("busy");
+      $("goLabel").textContent = total > 1 ? `生成 ${index + 1}/${total}` : "生成中…";
+      $("stageTitle").textContent = total > 1 ? `串行生成 ${index + 1}/${total}` : "生成中";
+      $("stageSub").textContent = completed ? `已完成 ${completed}/${total}` : "";
+      $("busyNote").textContent = [
+        `${params.width}×${params.height}`,
+        total > 1 ? `第 ${index + 1} 张` : params.modelName,
+        typical ? `通常约 ${(typical / 1000).toFixed(0)}s/张` : ""
+      ].filter(Boolean).join(" · ");
 
-    let record;
-    if ($("localCache").checked) {
-      const thumb = await makeThumb(blob);
-      record = history.add({
-        blob, params, size, ms,
-        thumbUrl: thumb ? URL.createObjectURL(thumb) : null
-      });
-    } else {
-      record = { id: `live-${Date.now()}`, createdAt: Date.now(), blob, params, size, ms };
+      const { blob, size, ms } = await generate(params, { signal: controller.signal });
+      controller = null;
+
+      // Decode first so the picture never appears half-painted.
+      const probe = new Image();
+      const tmp = URL.createObjectURL(blob);
+      probe.src = tmp;
+      if (probe.decode) await probe.decode().catch(() => {});
+      URL.revokeObjectURL(tmp);
+
+      let record;
+      if (base.localHistory) {
+        const thumb = await makeThumb(blob);
+        record = history.add({
+          blob, params, size, ms,
+          thumbUrl: thumb ? URL.createObjectURL(thumb) : null
+        });
+      } else {
+        record = { id: `live-${Date.now()}`, createdAt: Date.now(), blob, params, size, ms };
+      }
+      completed += 1;
+      completedRecords.push(record);
+      showEntry(record);
     }
-    showEntry(record);
+
+    if (total > 1) {
+      $("goLabel").textContent = "合成对比图…";
+      $("stageTitle").textContent = "正在整理批次";
+      $("stageSub").textContent = `已完成 ${completed}/${total}`;
+      $("busyNote").textContent = "图片已全部生成 · 正在本地合成对比图";
+      setState("busy");
+      try {
+        const comparison = await addComparison(completedRecords, base);
+        showEntry(comparison);
+        toast(`串行批量完成：${completed} 张，已生成对比图`, "ok");
+      } catch (error) {
+        if (error.name === "AbortError") throw error;
+        showEntry(completedRecords.at(-1));
+        toast(`图片已完成，但对比图生成失败：${error.message || "未知错误"}`);
+      }
+    }
   } catch (error) {
     if (error.name === "AbortError") {
       setState(current ? "done" : "empty");
-      toast("已取消", "ok");
+      toast(total > 1 ? `已取消：完成 ${completed}/${total} 张` : "已取消", "ok");
     } else {
-      $("errBody").textContent = error.message || "未知错误";
+      const prefix = total > 1 ? `第 ${completed + 1}/${total} 张失败，队列已停止。` : "";
+      $("errBody").textContent = `${prefix}${error.message || "未知错误"}`;
       setState("error");
-      $("stageTitle").textContent = "失败";
-      $("stageSub").textContent = "";
+      $("stageTitle").textContent = total > 1 ? "批量中止" : "失败";
+      $("stageSub").textContent = total > 1 ? `已完成 ${completed}/${total}` : "";
     }
   } finally {
     clearInterval(ticker);
     ticker = null;
+    controller = null;
+  }
+}
+
+/* Web Locks serializes every tab on this origin. The local proxy has its own
+   process-level guard as well; direct mode cannot coordinate other devices or
+   origins, so the upstream still remains the final authority there. */
+async function withGenerationLock(task) {
+  if (!navigator.locks?.request) {
+    await task();
+    return true;
+  }
+
+  let acquired = false;
+  let callbackStarted = false;
+  try {
+    await navigator.locks.request(
+      GENERATION_LOCK,
+      { mode: "exclusive", ifAvailable: true },
+      async (lock) => {
+        callbackStarted = true;
+        if (!lock) return;
+        acquired = true;
+        await task();
+      }
+    );
+  } catch (error) {
+    // Older Web Locks implementations may reject unsupported options. Only
+    // fall back when the task itself never started, otherwise it could run twice.
+    if (callbackStarted) throw error;
+    await task();
+    acquired = true;
+  }
+  return acquired;
+}
+
+async function run() {
+  if (jobActive) { toast("已有生成任务，请先等待或取消"); return; }
+  if (!validateSize()) return;
+
+  commitBatchCount();
+  const params = collect();
+  if (!params.prompt) { toast("请先写下画面描述"); $("prompt").focus(); return; }
+  if (!params.model) { toast("模型列表未就绪"); return; }
+  if (params.batchCount > 1 && !params.localHistory) {
+    toast("串行批量需要开启「加入历史」，否则前面的结果无法保留");
+    return;
+  }
+
+  sizeSkeleton();
+  jobActive = true;
+  cancelRequested = false;
+  setBusy(true);
+  setState("busy");
+  $("stageTitle").textContent = "准备生成";
+  $("stageSub").textContent = "";
+  $("busyNote").textContent = params.batchCount > 1 ? `等待串行锁 · 共 ${params.batchCount} 张` : "等待生成锁";
+
+  try {
+    const acquired = await withGenerationLock(() => runBatch(params));
+    if (!acquired) {
+      setState(current ? "done" : "empty");
+      toast("另一个标签页正在生成；为避免并发，本次未提交");
+    }
+  } catch (error) {
+    setState("error");
+    $("stageTitle").textContent = "失败";
+    $("stageSub").textContent = "";
+    $("errBody").textContent = error.message || "生成锁异常";
+  } finally {
+    jobActive = false;
+    cancelRequested = false;
     setBusy(false);
     controller = null;
     validateSize();
@@ -540,7 +824,10 @@ async function run() {
 
 /* ── wiring ────────────────────────────────────────────────── */
 $("form").addEventListener("submit", (e) => { e.preventDefault(); run(); });
-$("cancelBtn").addEventListener("click", () => controller?.abort());
+$("cancelBtn").addEventListener("click", () => {
+  cancelRequested = true;
+  controller?.abort();
+});
 $("retryBtn").addEventListener("click", () => run());
 
 $("model").addEventListener("change", () => { syncModelHint(); persist(); });
@@ -570,9 +857,14 @@ for (const id of ["optimize", "serverCache", "localCache"]) {
   $(id).addEventListener("change", () => { syncAdvBadge(); persist(); });
 }
 $("seed").addEventListener("input", () => { syncAdvBadge(); persistSoon(); });
+$("batchCount").addEventListener("input", () => { syncAdvBadge(); persistSoon(); });
+$("batchCount").addEventListener("change", commitBatchCount);
+$("batchCount").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); commitBatchCount(); }
+});
 
 $("diceBtn").addEventListener("click", () => {
-  $("seed").value = Math.floor(Math.random() * 4_294_967_295);
+  $("seed").value = randomSeed();
   syncAdvBadge();
 });
 
@@ -582,6 +874,7 @@ $("resetAdv").addEventListener("click", () => {
   $("scale").value = DEFAULTS.scale;
   $("cfg").value = DEFAULTS.cfg;
   $("seed").value = "";
+  $("batchCount").value = DEFAULTS.batchCount;
   $("optimize").checked = DEFAULTS.optimize;
   $("serverCache").checked = DEFAULTS.serverCache;
   $("localCache").checked = DEFAULTS.localCache;
@@ -601,7 +894,9 @@ $("saveBtn").addEventListener("click", () => {
   const ext = current.blob.type.includes("jpeg") ? "jpg" : "png";
   const a = document.createElement("a");
   a.href = current.url;
-  a.download = `${current.params.model}-${current.params.seed}.${ext}`;
+  a.download = current.params.isComparison
+    ? `${current.params.model}-batch-${current.params.comparisonTotal}.${ext}`
+    : `${current.params.model}-${current.params.seed}.${ext}`;
   a.click();
 });
 
@@ -627,7 +922,8 @@ $("reuseBtn").addEventListener("click", () => {
   $("scale").value = p.scale;
   $("cfg").value = p.cfg;
   if (catalog.samplers.includes(p.sampler)) $("sampler").value = p.sampler;
-  $("seed").value = p.seed ?? "";
+  $("seed").value = p.isComparison ? (p.seedStart ?? "") : (p.seed ?? "");
+  $("batchCount").value = Math.min(BATCH_MAX, Math.max(1, p.batchTotal || p.batchCount || 1));
   customMode = !RATIOS.some((r) => !r.custom && r.w === p.width && r.h === p.height);
   refreshHighlights();
   syncRangeLabels(); syncModelHint(); syncAdvBadge(); syncPromptCount(); sizeSkeleton(); persist();
@@ -685,9 +981,12 @@ $("lockButton").addEventListener("click", () => {
   // Session mode has no passphrase, so locking discards the key entirely and
   // the user must paste it again. Say so before doing it.
   const warnings = [];
+  if (jobActive) warnings.push("当前生成任务和剩余队列将被取消");
   if (vault.mode() === "session") warnings.push("本模式没有口令，Key 将被清除，需要重新填写");
   if (history.size) warnings.push(`本次的 ${history.size} 张图片将丢失`);
   if (warnings.length && !confirm(`锁定并重载页面：\n\n· ${warnings.join("\n· ")}\n\n继续？`)) return;
+  cancelRequested = true;
+  controller?.abort();
   suppressUnloadGuard = true;
   vault.lock();
   location.reload();
@@ -699,7 +998,7 @@ $("lockButton").addEventListener("click", () => {
    something to lose. Browsers ignore custom text and show their own prompt;
    they also require a prior user interaction, so this cannot nag on load. */
 addEventListener("beforeunload", (event) => {
-  if (suppressUnloadGuard || !history.size) return;
+  if (suppressUnloadGuard || (!history.size && !jobActive)) return;
   event.preventDefault();
   event.returnValue = "";
 });

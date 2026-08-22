@@ -193,6 +193,12 @@ export async function generate(payload, { signal } = {}) {
       if (text) message = text.slice(0, 300);
     }
     if (res.status === 401) message = "API Key 无效或已过期";
+    if (res.status === 429 && message === `请求失败 (${res.status})`) {
+      message = "生成请求过于频繁或已有任务正在进行，请稍后重试";
+    }
+    if ([409, 423].includes(res.status) && message === `请求失败 (${res.status})`) {
+      message = "上游已有生成任务，当前请求未执行";
+    }
     throw new Error(message);
   }
 
