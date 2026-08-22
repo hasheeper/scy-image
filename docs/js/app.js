@@ -1,0 +1,867 @@
+import { vault } from "./vault.js";
+import { detectMode, fetchCatalog, generate, state as api, DEFAULT_MODEL, FALLBACK_MAX_PIXELS } from "./api.js";
+import { history, prefs, makeThumb } from "./store.js";
+import { attach as attachHighlight } from "./highlight.js";
+
+const $ = (id) => document.getElementById(id);
+const body = document.body;
+
+/* Ratio cards. `box` is a scale model of the real output shape, so the
+   glyph itself communicates the aspect rather than a text label alone. */
+const RATIOS = [
+  { tag: "2:3", w: 832, h: 1216, box: [13, 19] },
+  { tag: "1:1", w: 1024, h: 1024, box: [17, 17] },
+  { tag: "3:2", w: 1216, h: 832, box: [19, 13] },
+  { tag: "自定义", custom: true, box: [17, 13] }
+];
+
+const SNAP = 64;
+const DIM_MIN = 64;
+const DIM_MAX = 2048;
+
+const DEFAULTS = {
+  sampler: "k_euler_ancestral",
+  steps: 25, scale: 5, cfg: 10,
+  optimize: false, serverCache: false, localCache: true
+};
+
+/* True when the size matches no preset, or the user picked the custom card. */
+let customMode = false;
+
+/* Weight-highlight mirrors; call after setting a textarea's value in code. */
+let refreshPromptHL = () => {};
+let refreshNegativeHL = () => {};
+const refreshHighlights = () => { refreshPromptHL(); refreshNegativeHL(); };
+
+let catalog = { models: [], samplers: [], defaults: {} };
+let controller = null;
+let ticker = null;
+let current = null;
+const urls = new Map();
+
+/* ── toast ─────────────────────────────────────────────────── */
+function toast(message, kind = "err") {
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  el.append(document.createTextNode(message));
+  $("toasts").append(el);
+  setTimeout(() => {
+    el.classList.add("out");
+    setTimeout(() => el.remove(), 160);
+  }, kind === "err" ? 7000 : 3000);
+}
+
+const setState = (next) => { body.dataset.state = next; };
+
+/* ── Fit ───────────────────────────────────────────────────── */
+/* Publish the stage's usable box as pixel values. CSS cannot express "fit
+   inside my parent" here: the parent is content-sized, so a percentage
+   max-height against it resolves to `none` and the image escapes its box.
+   
+   Measured on .stage, NOT .viewport. In 1:1 mode the viewport scrolls, so
+   reading its clientWidth would couple the measurement to scrollbar
+   visibility — that feedback loop (measure -> resize -> measure) was what
+   locked up the main thread and killed the tab. .stage never scrolls. */
+let fitW = 0;
+let fitH = 0;
+
+function measureFit() {
+  const stage = document.querySelector(".stage");
+  const head = $("stageHead");
+  if (!stage) return;
+
+  const pad = 24 * 2; // .viewport padding, both sides
+  const w = Math.floor(stage.clientWidth - pad);
+  const h = Math.floor(stage.clientHeight - (head?.offsetHeight || 48) - pad);
+  if (w <= 0 || h <= 0) return;
+  if (w === fitW && h === fitH) return; // idempotent: breaks any resize loop
+
+  fitW = w;
+  fitH = h;
+  body.style.setProperty("--fit-w", `${w}px`);
+  body.style.setProperty("--fit-h", `${h}px`);
+  sizeSkeleton();
+}
+
+/* Skeleton mirrors the pending image's shape, letterboxed into the same box. */
+function sizeSkeleton() {
+  if (!fitW || !fitH) return;
+  const aw = Number($("width").value) || 1;
+  const ah = Number($("height").value) || 1;
+  const scale = Math.min(fitW / aw, fitH / ah, 1);
+  const sk = $("skeleton");
+  sk.style.setProperty("--sk-w", `${Math.round(aw * scale)}px`);
+  sk.style.setProperty("--sk-h", `${Math.round(ah * scale)}px`);
+}
+
+/* ── gate ──────────────────────────────────────────────────── */
+function showGate(view) {
+  const gate = $("gate");
+  gate.hidden = false;
+  for (const s of gate.querySelectorAll(".gate-view")) s.hidden = s.dataset.view !== view;
+  requestAnimationFrame(() => { body.dataset.gate = "open"; });
+  const focus = { setup: "setupKey", unlock: "unlockPass", proxy: "proxyEnter" }[view];
+  setTimeout(() => $(focus)?.focus(), 300);
+}
+
+function hideGate() {
+  body.dataset.gate = "closed";
+  setTimeout(() => { $("gate").hidden = true; }, 320);
+}
+
+/* ── catalog ───────────────────────────────────────────────── */
+const activeModel = () => catalog.models.find((m) => m.id === $("model").value) || null;
+const maxPixels = () => activeModel()?.maxPixels || FALLBACK_MAX_PIXELS;
+
+function renderCatalog() {
+  const saved = prefs.load();
+
+  const modelSel = $("model");
+  modelSel.innerHTML = "";
+  for (const m of catalog.models) {
+    const o = document.createElement("option");
+    o.value = m.id;
+    o.textContent = m.name;
+    modelSel.append(o);
+  }
+  const want = saved.model && catalog.models.some((m) => m.id === saved.model)
+    ? saved.model
+    : catalog.models.some((m) => m.id === DEFAULT_MODEL) ? DEFAULT_MODEL : catalog.models[0]?.id;
+  if (want) modelSel.value = want;
+
+  const sampSel = $("sampler");
+  sampSel.innerHTML = "";
+  for (const id of catalog.samplers) {
+    const o = document.createElement("option");
+    o.value = id;
+    o.textContent = id.replace(/^k_/, "").replace(/_/g, " ");
+    sampSel.append(o);
+  }
+  sampSel.value = catalog.samplers.includes(saved.sampler) ? saved.sampler
+    : catalog.samplers.includes(DEFAULTS.sampler) ? DEFAULTS.sampler : catalog.samplers[0];
+
+  syncModelHint();
+}
+
+function syncModelHint() {
+  // Model detail lives on the select's own tooltip; the pixel budget is shown
+  // inline by validateSize() instead of a separate line of prose.
+  const m = activeModel();
+  $("model").title = m ? [m.description, `上限 ${(m.maxPixels / 1e6).toFixed(2)}M 像素`].filter(Boolean).join(" · ") : "";
+  validateSize();
+}
+
+function renderRatios() {
+  const host = $("ratios");
+  host.innerHTML = "";
+  for (const r of RATIOS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ratio";
+    btn.setAttribute("role", "radio");
+    btn.dataset.w = r.w;
+    btn.dataset.h = r.h;
+    btn.title = `${r.w} × ${r.h}`;
+
+    const box = document.createElement("span");
+    box.className = "ratio-box";
+    const i = document.createElement("i");
+    i.style.width = `${r.box[0]}px`;
+    i.style.height = `${r.box[1]}px`;
+    box.append(i);
+
+    const tag = document.createElement("b");
+    tag.textContent = r.tag;
+
+    btn.append(box, tag);
+
+    if (r.custom) {
+      btn.dataset.custom = "1";
+      btn.title = "自由填写宽高";
+      btn.addEventListener("click", () => {
+        customMode = true;
+        syncRatioSelection();
+        $("width").focus();
+        $("width").select();
+      });
+    } else {
+      btn.dataset.w = r.w;
+      btn.dataset.h = r.h;
+      btn.title = `${r.w} × ${r.h}`;
+      btn.addEventListener("click", () => {
+        customMode = false;
+        $("width").value = r.w;
+        $("height").value = r.h;
+        validateSize();
+        sizeSkeleton();
+        persist();
+      });
+    }
+    host.append(btn);
+  }
+}
+
+function syncRatioSelection() {
+  const w = Number($("width").value);
+  const h = Number($("height").value);
+  const preset = RATIOS.some((r) => !r.custom && r.w === w && r.h === h);
+
+  for (const btn of $("ratios").children) {
+    const isCustom = btn.dataset.custom === "1";
+    const on = isCustom
+      ? (customMode || !preset)
+      : (!customMode && Number(btn.dataset.w) === w && Number(btn.dataset.h) === h);
+    btn.setAttribute("aria-checked", String(on));
+  }
+  $("sizeFields").hidden = !(customMode || !preset);
+}
+
+/* Round to the nearest multiple of 64 within range. The upstream rejects
+   off-grid dimensions, so snapping is corrective rather than cosmetic. */
+function snap(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const rounded = Math.round(n / SNAP) * SNAP;
+  return Math.min(DIM_MAX, Math.max(DIM_MIN, rounded));
+}
+
+/* Snap on commit (blur / Enter), not while typing — snapping mid-keystroke
+   fights the user. */
+function snapField(id) {
+  const el = $(id);
+  const next = snap(el.value);
+  if (next === null) return;
+  if (Number(el.value) !== next) {
+    el.value = next;
+    toast(`已对齐到 64 的倍数：${next}`, "ok");
+  }
+  validateSize();
+  sizeSkeleton();
+  persist();
+}
+
+/* Over-budget requests come back as a 512x256 "Generation Failed" card
+   with HTTP 200, so block them before they are sent. */
+function validateSize() {
+  const w = Number($("width").value) || 0;
+  const h = Number($("height").value) || 0;
+  const px = w * h;
+  const cap = maxPixels();
+
+  $("pixelMeta").textContent = px ? `${w}×${h} · ${(px / 1e6).toFixed(2)}M` : "";
+  syncRatioSelection();
+
+  let problem = "";
+  if (w < DIM_MIN || h < DIM_MIN) problem = `宽高至少 ${DIM_MIN}`;
+  else if (px > cap) {
+    const side = Math.floor(Math.sqrt(cap) / SNAP) * SNAP;
+    problem = `超出模型上限 ${(cap / 1e6).toFixed(2)}M 像素（约 ${side}×${side}）`;
+  } else if (w % SNAP || h % SNAP) problem = "离开输入框后会自动对齐到 64 的倍数";
+
+  const warn = $("pixelWarn");
+  warn.textContent = problem;
+  warn.hidden = !problem;
+
+  const fatal = w < DIM_MIN || h < DIM_MIN || px > cap;
+  $("pixelWarn").classList.toggle("warn", fatal);
+  $("goBtn").disabled = fatal || body.dataset.state === "busy";
+  return !fatal;
+}
+
+function syncAdvBadge() {
+  let n = 0;
+  if ($("sampler").value !== DEFAULTS.sampler) n += 1;
+  if (Number($("steps").value) !== DEFAULTS.steps) n += 1;
+  if (Number($("scale").value) !== DEFAULTS.scale) n += 1;
+  if (Number($("cfg").value) !== DEFAULTS.cfg) n += 1;
+  if ($("seed").value.trim() !== "") n += 1;
+  if ($("optimize").checked !== DEFAULTS.optimize) n += 1;
+  if ($("serverCache").checked !== DEFAULTS.serverCache) n += 1;
+  if ($("localCache").checked !== DEFAULTS.localCache) n += 1;
+
+  const badge = $("advBadge");
+  badge.hidden = n === 0;
+  badge.textContent = String(n);
+}
+
+function syncRangeLabels() {
+  $("stepsVal").textContent = $("steps").value;
+  $("scaleVal").textContent = $("scale").value;
+  $("cfgVal").textContent = $("cfg").value;
+}
+
+function syncPromptCount() {
+  $("promptCount").textContent = String($("prompt").value.length);
+}
+
+/* ── prefs ─────────────────────────────────────────────────── */
+function persist() {
+  prefs.save({
+    prompt: $("prompt").value,
+    negative: $("negative").value,
+    model: $("model").value, sampler: $("sampler").value,
+    width: Number($("width").value), height: Number($("height").value),
+    steps: Number($("steps").value), scale: Number($("scale").value), cfg: Number($("cfg").value),
+    seed: $("seed").value,
+    optimize: $("optimize").checked, serverCache: $("serverCache").checked,
+    localCache: $("localCache").checked
+  });
+}
+
+/* Text fields fire `persist` on every keystroke, so coalesce the writes. */
+let persistTimer = null;
+function persistSoon() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(persist, 400);
+}
+
+function restore() {
+  const s = prefs.load();
+  if (typeof s.prompt === "string") $("prompt").value = s.prompt;
+  if (typeof s.negative === "string") $("negative").value = s.negative;
+  if (s.width) $("width").value = s.width;
+  if (s.height) $("height").value = s.height;
+  if (s.steps != null) $("steps").value = s.steps;
+  if (s.scale != null) $("scale").value = s.scale;
+  if (s.cfg != null) $("cfg").value = s.cfg;
+  if (s.seed != null) $("seed").value = s.seed;
+  $("optimize").checked = s.optimize ?? DEFAULTS.optimize;
+  $("serverCache").checked = s.serverCache ?? DEFAULTS.serverCache;
+  $("localCache").checked = s.localCache ?? DEFAULTS.localCache;
+}
+
+/* Median of past durations. Measured spread is wide and driven by upstream
+   queue depth, not step count (8 steps once took longer than 16), so a
+   determinate progress bar would be fiction. Show a typical time instead. */
+function typicalMs(items) {
+  const xs = items.map((i) => i.ms).filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+  if (xs.length < 3) return null;
+  return xs[Math.floor(xs.length / 2)];
+}
+
+/* ── gallery ───────────────────────────────────────────────── */
+function renderGallery() {
+  const items = history.all();
+  const tray = $("tray");
+  const seen = new Set();
+
+  tray.innerHTML = "";
+  $("histCount").textContent = String(items.length);
+  $("clearHist").hidden = items.length === 0;
+  $("trayEmpty").hidden = items.length !== 0;
+
+  for (const item of items) {
+    seen.add(item.id);
+
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "tile";
+    tile.setAttribute("aria-current", String(current?.id === item.id));
+    const when = new Date(item.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    tile.title = `${when}\n${item.params?.prompt?.slice(0, 140) || ""}`;
+
+    const img = document.createElement("img");
+    // Use the downscaled thumbnail. Full-size blobs here decode to ~3.9 MB
+    // each and previously exhausted renderer memory.
+    img.src = item.thumbUrl || urls.get(item.id) || (() => {
+      const u = URL.createObjectURL(item.blob);
+      urls.set(item.id, u);
+      return u;
+    })();
+    img.alt = "";
+    img.decoding = "async";
+    // reserve the right box before decode so the rail does not jump
+    if (item.size?.width && item.size?.height) {
+      tile.style.aspectRatio = `${item.size.width} / ${item.size.height}`;
+    }
+    tile.append(img);
+
+    const x = document.createElement("span");
+    x.className = "tile-x";
+    x.textContent = "×";
+    x.setAttribute("role", "button");
+    x.setAttribute("aria-label", "删除");
+    x.addEventListener("click", (event) => {
+      event.stopPropagation();
+      history.remove(item.id);
+      const url = urls.get(item.id);
+      if (url) { URL.revokeObjectURL(url); urls.delete(item.id); }
+      if (current?.id === item.id) {
+        current = null;
+        setState("empty");
+        for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = true;
+      }
+      renderGallery();
+    });
+    tile.append(x);
+
+    tile.addEventListener("click", () => showEntry(item));
+    tray.append(tile);
+  }
+
+  for (const [id, url] of urls) {
+    if (!seen.has(id)) { URL.revokeObjectURL(url); urls.delete(id); }
+  }
+}
+
+function showEntry(item) {
+  const url = urls.get(item.id) || URL.createObjectURL(item.blob);
+  urls.set(item.id, url);
+  current = { id: item.id, blob: item.blob, params: item.params, size: item.size, url };
+
+  $("image").src = url;
+
+  $("stageTitle").textContent = item.params?.modelName || "结果";
+  const bits = [
+    item.size ? `${item.size.width}×${item.size.height}` : "",
+    item.params?.seed != null ? `seed ${item.params.seed}` : "",
+    Number.isFinite(item.ms) ? `${(item.ms / 1000).toFixed(1)}s` : ""
+  ].filter(Boolean);
+  $("stageSub").textContent = bits.join("  ·  ");
+  $("printMeta").textContent = [
+    item.params?.sampler,
+    `${item.params?.steps} steps`,
+    `cfg ${item.params?.cfg}`,
+    item.params?.seed != null ? `seed ${item.params.seed}` : ""
+  ].filter(Boolean).join("   ");
+
+  setState("done");
+  for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = false;
+  renderGallery();
+}
+
+/* ── generate ──────────────────────────────────────────────── */
+function collect() {
+  const model = activeModel();
+  const raw = $("seed").value.trim();
+  const seed = raw === ""
+    ? Math.floor(Math.random() * 4_294_967_295)
+    : Math.min(4_294_967_295, Math.max(0, Math.floor(Number(raw))));
+
+  return {
+    prompt: $("prompt").value.trim(),
+    negative_prompt: $("negative").value.trim(),
+    model: model?.id,
+    modelName: model?.name,
+    width: Number($("width").value),
+    height: Number($("height").value),
+    steps: Number($("steps").value),
+    sampler: $("sampler").value,
+    scale: Number($("scale").value),
+    cfg: Number($("cfg").value),
+    seed,
+    optimize: $("optimize").checked,
+    cache: $("serverCache").checked,
+    transform_prompt: false
+  };
+}
+
+function startTimer() {
+  const t0 = performance.now();
+  $("timer").textContent = "0.0s";
+  ticker = setInterval(() => {
+    $("timer").textContent = `${((performance.now() - t0) / 1000).toFixed(1)}s`;
+  }, 100);
+}
+
+function setBusy(on) {
+  $("goBtn").disabled = on;
+  $("goLabel").textContent = on ? "生成中…" : "生成";
+  $("cancelBtn").hidden = !on;
+  if (on) for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = true;
+}
+
+async function run() {
+  if (!validateSize()) return;
+
+  const params = collect();
+  if (!params.prompt) { toast("请先写下画面描述"); $("prompt").focus(); return; }
+  if (!params.model) { toast("模型列表未就绪"); return; }
+
+  sizeSkeleton();
+
+  const typical = typicalMs(history.all());
+  $("busyNote").textContent = typical
+    ? `${params.width}×${params.height} · 通常约 ${(typical / 1000).toFixed(0)}s`
+    : `${params.width}×${params.height} · ${params.modelName}`;
+
+  controller = new AbortController();
+  setState("busy");
+  setBusy(true);
+  $("stageTitle").textContent = "生成中";
+  $("stageSub").textContent = "";
+  startTimer();
+
+  try {
+    const { blob, size, ms } = await generate(params, { signal: controller.signal });
+
+    // Decode first so the picture never appears half-painted.
+    const probe = new Image();
+    const tmp = URL.createObjectURL(blob);
+    probe.src = tmp;
+    if (probe.decode) await probe.decode().catch(() => {});
+    URL.revokeObjectURL(tmp);
+
+    let record;
+    if ($("localCache").checked) {
+      const thumb = await makeThumb(blob);
+      record = history.add({
+        blob, params, size, ms,
+        thumbUrl: thumb ? URL.createObjectURL(thumb) : null
+      });
+    } else {
+      record = { id: `live-${Date.now()}`, createdAt: Date.now(), blob, params, size, ms };
+    }
+    showEntry(record);
+  } catch (error) {
+    if (error.name === "AbortError") {
+      setState(current ? "done" : "empty");
+      toast("已取消", "ok");
+    } else {
+      $("errBody").textContent = error.message || "未知错误";
+      setState("error");
+      $("stageTitle").textContent = "失败";
+      $("stageSub").textContent = "";
+    }
+  } finally {
+    clearInterval(ticker);
+    ticker = null;
+    setBusy(false);
+    controller = null;
+    validateSize();
+  }
+}
+
+/* ── wiring ────────────────────────────────────────────────── */
+$("form").addEventListener("submit", (e) => { e.preventDefault(); run(); });
+$("cancelBtn").addEventListener("click", () => controller?.abort());
+$("retryBtn").addEventListener("click", () => run());
+
+$("model").addEventListener("change", () => { syncModelHint(); persist(); });
+$("sampler").addEventListener("change", () => { syncAdvBadge(); persist(); });
+$("prompt").addEventListener("input", () => { syncPromptCount(); persistSoon(); });
+$("negative").addEventListener("input", persistSoon);
+
+
+
+
+for (const id of ["width", "height"]) {
+  $(id).addEventListener("input", () => {
+    customMode = true;
+    validateSize();
+    sizeSkeleton();
+    persist();
+  });
+  $(id).addEventListener("change", () => snapField(id));
+  $(id).addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); snapField(id); }
+  });
+}
+for (const id of ["steps", "scale", "cfg"]) {
+  $(id).addEventListener("input", () => { syncRangeLabels(); syncAdvBadge(); persist(); });
+}
+for (const id of ["optimize", "serverCache", "localCache"]) {
+  $(id).addEventListener("change", () => { syncAdvBadge(); persist(); });
+}
+$("seed").addEventListener("input", () => { syncAdvBadge(); persistSoon(); });
+
+$("diceBtn").addEventListener("click", () => {
+  $("seed").value = Math.floor(Math.random() * 4_294_967_295);
+  syncAdvBadge();
+});
+
+$("resetAdv").addEventListener("click", () => {
+  $("sampler").value = catalog.samplers.includes(DEFAULTS.sampler) ? DEFAULTS.sampler : catalog.samplers[0];
+  $("steps").value = DEFAULTS.steps;
+  $("scale").value = DEFAULTS.scale;
+  $("cfg").value = DEFAULTS.cfg;
+  $("seed").value = "";
+  $("optimize").checked = DEFAULTS.optimize;
+  $("serverCache").checked = DEFAULTS.serverCache;
+  $("localCache").checked = DEFAULTS.localCache;
+  syncRangeLabels(); syncAdvBadge(); persist();
+});
+
+$("exampleBtn").addEventListener("click", () => {
+  $("prompt").value = "1girl, solo, silver hair, violet eyes, black dress, moonlit garden, cinematic lighting, intricate details, masterpiece, best quality";
+  $("negative").value = "lowres, blurry, bad anatomy, extra fingers, text, watermark, jpeg artifacts";
+  refreshHighlights();
+  syncPromptCount(); persist();
+  $("prompt").focus();
+});
+
+$("saveBtn").addEventListener("click", () => {
+  if (!current) return;
+  const ext = current.blob.type.includes("jpeg") ? "jpg" : "png";
+  const a = document.createElement("a");
+  a.href = current.url;
+  a.download = `${current.params.model}-${current.params.seed}.${ext}`;
+  a.click();
+});
+
+$("copyBtn").addEventListener("click", async () => {
+  if (!current?.params?.prompt) return;
+  try {
+    await navigator.clipboard.writeText(current.params.prompt);
+    toast("描述已复制", "ok");
+  } catch {
+    toast("浏览器拒绝了剪贴板访问");
+  }
+});
+
+$("reuseBtn").addEventListener("click", () => {
+  if (!current?.params) return;
+  const p = current.params;
+  $("prompt").value = p.prompt || "";
+  $("negative").value = p.negative_prompt || "";
+  if (catalog.models.some((m) => m.id === p.model)) $("model").value = p.model;
+  $("width").value = p.width;
+  $("height").value = p.height;
+  $("steps").value = p.steps;
+  $("scale").value = p.scale;
+  $("cfg").value = p.cfg;
+  if (catalog.samplers.includes(p.sampler)) $("sampler").value = p.sampler;
+  $("seed").value = p.seed ?? "";
+  customMode = !RATIOS.some((r) => !r.custom && r.w === p.width && r.h === p.height);
+  refreshHighlights();
+  syncRangeLabels(); syncModelHint(); syncAdvBadge(); syncPromptCount(); sizeSkeleton(); persist();
+  toast("参数已回填", "ok");
+});
+
+$("clearHist").addEventListener("click", () => {
+  history.clear();
+  for (const [, url] of urls) URL.revokeObjectURL(url);
+  urls.clear();
+  current = null;
+  setState("empty");
+  for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = true;
+  renderGallery();
+});
+
+$("histToggle").addEventListener("click", () => {
+  const on = body.dataset.hist !== "off";
+  body.dataset.hist = on ? "off" : "on";
+  $("histToggle").setAttribute("aria-pressed", String(!on));
+  $("histToggle").dataset.tip = on ? "显示历史" : "隐藏历史";
+  prefs.save({ histOpen: !on });
+  setTimeout(measureFit, 400);
+});
+
+/* lightbox */
+function openZoom() {
+  if (!current) return;
+  $("lightboxImg").src = current.url;
+  $("lightbox").hidden = false;
+  requestAnimationFrame(() => { body.dataset.zoom = "on"; });
+}
+function closeZoom() {
+  body.dataset.zoom = "off";
+  setTimeout(() => { $("lightbox").hidden = true; }, 240);
+}
+$("image").addEventListener("click", openZoom);
+$("lightboxClose").addEventListener("click", closeZoom);
+$("lightbox").addEventListener("click", (e) => { if (e.target !== $("lightboxImg")) closeZoom(); });
+
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    e.preventDefault();
+    if (!$("goBtn").disabled) run();
+  }
+  if (e.key === "Escape") {
+    if (body.dataset.zoom === "on") closeZoom();
+    else if (controller) controller.abort();
+  }
+});
+
+$("lockButton").addEventListener("click", () => { vault.lock(); location.reload(); });
+
+/* Flush any debounced write before the page goes away, so refreshing right
+   after typing cannot lose the last few hundred milliseconds. */
+addEventListener("pagehide", () => { clearTimeout(persistTimer); persist(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { clearTimeout(persistTimer); persist(); }
+});
+
+/* ── Splitter ──────────────────────────────────────────────── */
+const RAIL_MIN = 292;
+const RAIL_MAX = 560;
+
+function setRail(px) {
+  const clamped = Math.min(RAIL_MAX, Math.max(RAIL_MIN, Math.round(px)));
+  document.documentElement.style.setProperty("--rail", `${clamped}px`);
+  prefs.save({ rail: clamped });
+  measureFit();
+}
+
+$("splitter").addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  const startX = event.clientX;
+  const startRail = $("form").getBoundingClientRect().width;
+  body.dataset.drag = "on";
+  $("splitter").setPointerCapture(event.pointerId);
+
+  const move = (e) => setRail(startRail + (e.clientX - startX));
+  const up = () => {
+    body.dataset.drag = "off";
+    $("splitter").removeEventListener("pointermove", move);
+    $("splitter").removeEventListener("pointerup", up);
+    $("splitter").removeEventListener("pointercancel", up);
+  };
+  $("splitter").addEventListener("pointermove", move);
+  $("splitter").addEventListener("pointerup", up);
+  $("splitter").addEventListener("pointercancel", up);
+});
+
+$("splitter").addEventListener("dblclick", () => setRail(352));
+
+$("splitter").addEventListener("keydown", (event) => {
+  const step = event.shiftKey ? 40 : 12;
+  const width = $("form").getBoundingClientRect().width;
+  if (event.key === "ArrowLeft") { event.preventDefault(); setRail(width - step); }
+  if (event.key === "ArrowRight") { event.preventDefault(); setRail(width + step); }
+});
+
+/* Observe .stage: it is driven by the window and the two rails, never by its
+   own content, so this cannot feed back into itself. */
+const stageEl = document.querySelector(".stage");
+if (stageEl) new ResizeObserver(measureFit).observe(stageEl);
+window.addEventListener("resize", measureFit);
+
+/* ── gate handlers ─────────────────────────────────────────── */
+for (const radio of document.querySelectorAll('input[name="saveMode"]')) {
+  radio.addEventListener("change", () => {
+    const mode = document.querySelector('input[name="saveMode"]:checked').value;
+    $("passFields").hidden = mode !== "encrypted";
+  });
+}
+
+$("setupSubmit").addEventListener("click", async () => {
+  const note = $("setupNote");
+  note.className = "note";
+  const key = $("setupKey").value.trim();
+  if (!key) { note.textContent = "请填写 API Key"; return; }
+
+  const mode = document.querySelector('input[name="saveMode"]:checked').value;
+  try {
+    if (mode === "encrypted") {
+      const p1 = $("setupPass").value;
+      if (p1.length < 4) { note.textContent = "口令至少 4 位"; return; }
+      if (p1 !== $("setupPass2").value) { note.textContent = "两次口令不一致"; return; }
+      await vault.saveEncrypted(key, p1, { remember: $("setupRemember").checked });
+    } else {
+      vault.saveSession(key);
+    }
+    $("setupKey").value = $("setupPass").value = $("setupPass2").value = "";
+    await enterApp();
+  } catch (error) {
+    note.textContent = error.message;
+  }
+});
+
+$("unlockSubmit").addEventListener("click", async () => {
+  const note = $("unlockNote");
+  note.className = "note";
+  try {
+    await vault.unlock($("unlockPass").value, { remember: $("unlockRemember").checked });
+    $("unlockPass").value = "";
+    await enterApp();
+  } catch (error) {
+    note.textContent = error.message;
+  }
+});
+
+$("unlockPass").addEventListener("keydown", (e) => { if (e.key === "Enter") $("unlockSubmit").click(); });
+$("setupKey").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("setupPass").focus(); } });
+$("setupPass2").addEventListener("keydown", (e) => { if (e.key === "Enter") $("setupSubmit").click(); });
+$("forgetKey").addEventListener("click", () => { vault.forget(); showGate("setup"); });
+$("proxyEnter").addEventListener("click", () => enterApp());
+
+/* ── boot ──────────────────────────────────────────────────── */
+async function enterApp() {
+  hideGate();
+  const proxied = api.mode === "proxy";
+  $("modeChip").textContent = proxied ? "本地代理" : "浏览器直连";
+  $("modeChip").title = proxied
+    ? "Key 由本地服务持有,浏览器不接触明文"
+    : "浏览器直接携带 Key 请求上游";
+
+  try {
+    catalog = await fetchCatalog();
+    if (!catalog.models.length) throw new Error("上游未返回可用的 NAI 模型");
+  } catch (error) {
+    toast(`模型列表加载失败：${error.message}`);
+    catalog = {
+      models: [{ id: DEFAULT_MODEL, name: "NAI Diffusion V5 Full", description: "", maxPixels: FALLBACK_MAX_PIXELS }],
+      samplers: ["k_euler_ancestral", "k_euler", "k_dpmpp_2m", "k_dpmpp_sde", "ddim_v3"],
+      defaults: {}
+    };
+  }
+  renderCatalog();
+
+  restore();
+  syncRangeLabels();
+  syncAdvBadge();
+  syncPromptCount();
+  validateSize();
+  renderGallery();
+  setState("empty");
+  measureFit();
+  $("prompt").focus();
+}
+
+async function boot() {
+  // Older builds persisted images in IndexedDB; history is session-only now.
+  history.purgeLegacy();
+
+  renderRatios();
+  restore();
+  refreshPromptHL = attachHighlight($("prompt"));
+  refreshNegativeHL = attachHighlight($("negative"));
+
+  /* The prompt box fills the rail by default; dragging the handle pins it.
+     Must run after attach(), which is what creates .hl-wrap. */
+  {
+    const hero = $("prompt").closest(".fld-hero");
+    const wrap = hero.querySelector(".hl-wrap");
+    const savedH = prefs.load().promptH;
+    if (savedH) {
+      wrap.style.height = `${savedH}px`;
+      hero.dataset.resized = "1";
+    }
+    let seen = null;
+    new ResizeObserver(() => {
+      const h = Math.round(wrap.getBoundingClientRect().height);
+      if (seen !== null && Math.abs(h - seen) > 1 && wrap.style.height) {
+        hero.dataset.resized = "1";
+        prefs.save({ promptH: h });
+      }
+      seen = h;
+    }).observe(wrap);
+  }
+  const saved = prefs.load();
+  if (saved.rail) document.documentElement.style.setProperty("--rail", `${saved.rail}px`);
+  body.dataset.hist = saved.histOpen === false ? "off" : "on";
+  $("histToggle").setAttribute("aria-pressed", String(saved.histOpen !== false));
+  $("histToggle").dataset.tip = saved.histOpen === false ? "显示历史" : "隐藏历史";
+  customMode = !RATIOS.some(
+    (r) => !r.custom && r.w === Number($("width").value) && r.h === Number($("height").value)
+  );
+  syncRangeLabels();
+  syncRatioSelection();
+  measureFit();
+
+  const status = await detectMode();
+
+  if (status.mode === "proxy") {
+    if (status.configured) { await enterApp(); return; }
+    $("proxyNote").textContent = "后端尚未配置 Key：填写 config/api-key.txt 后重启服务。";
+    $("proxyEnter").disabled = true;
+    showGate("proxy");
+    return;
+  }
+
+  if (await vault.tryResume()) { await enterApp(); return; }
+  showGate(vault.mode() === "encrypted" ? "unlock" : "setup");
+}
+
+boot();

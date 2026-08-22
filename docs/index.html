@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta name="robots" content="noindex">
+    <title>Scylla</title>
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%23111'/><path d='M8 21l5-6 4 4.5 3-3.5 4 5z' fill='%23b3a1ff'/><circle cx='12.5' cy='11' r='2' fill='%23b3a1ff'/></svg>">
+  </head>
+  <body data-state="boot">
+    <!-- Icon sprite -->
+    <svg class="sprite" aria-hidden="true">
+      <defs>
+        <symbol id="i-logo" viewBox="0 0 24 24">
+          <path d="M4 17.5l4-4.5 3 3.5 2.5-3 6.5 8" /><circle cx="9" cy="8" r="1.8" />
+          <rect x="2.5" y="3.5" width="19" height="17" rx="3.5" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+        </symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24">
+          <path d="M12 3.5 21 8l-9 4.5L3 8l9-4.5Z" /><path d="m3 13 9 4.5L21 13" />
+        </symbol>
+        <symbol id="i-sparkle" viewBox="0 0 24 24">
+          <path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" />
+        </symbol>
+        <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" /></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24">
+          <path d="M12 4v11m0 0 4-4m-4 4-4-4" /><path d="M4.5 18.5h15" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+          <rect x="9" y="9" width="11" height="11" rx="2.5" /><path d="M15 6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15" />
+        </symbol>
+        <symbol id="i-reuse" viewBox="0 0 24 24">
+          <path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v4.5h-4.5" />
+        </symbol>
+        <symbol id="i-retry" viewBox="0 0 24 24">
+          <path d="M4 12a8 8 0 1 0 2.6-5.9" /><path d="M4 4v4.5h4.5" />
+        </symbol>
+        <symbol id="i-dice" viewBox="0 0 24 24">
+          <rect x="4" y="4" width="16" height="16" rx="4" /><circle cx="9" cy="9" r="1.3" /><circle cx="15" cy="15" r="1.3" /><circle cx="15" cy="9" r="1.3" /><circle cx="9" cy="15" r="1.3" />
+        </symbol>
+        <symbol id="i-reset" viewBox="0 0 24 24">
+          <path d="M4 12a8 8 0 1 0 8-8" /><path d="M12 7.5v5l3.5 2" />
+        </symbol>
+        <symbol id="i-wand" viewBox="0 0 24 24">
+          <path d="M5 19 16.5 7.5" /><path d="m14.5 5.5 4 4" /><path d="M19 14.5v3M17.5 16h3M6 4v2.5M4.75 5.25h2.5" />
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24">
+          <path d="M5 7.5h14M9.5 7.5V5.5h5v2M7 7.5l.8 11a1.5 1.5 0 0 0 1.5 1.4h5.4a1.5 1.5 0 0 0 1.5-1.4l.8-11" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11m0-11-11 11" /></symbol>
+        <symbol id="i-image" viewBox="0 0 24 24">
+          <rect x="3" y="4.5" width="18" height="15" rx="3" /><path d="m4 16 4.5-4.5 3 3 2.5-3 6 6" /><circle cx="9" cy="9" r="1.5" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.5M12 16v.5" /></symbol>
+      </defs>
+    </svg>
+
+    <!-- ══ Key gate ═══════════════════════════════════════════ -->
+    <div class="gate" id="gate" hidden>
+      <div class="gate-card" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+        <div class="gate-brand">
+          <svg class="ico ico-lg"><use href="#i-logo" /></svg>
+          <h1 id="gateTitle">Scylla</h1>
+        </div>
+
+        <section class="gate-view" data-view="setup">
+          <p class="lede">填写 API Key 开始。Key 只保存在这台设备。</p>
+          <div class="fld">
+            <label for="setupKey">API Key</label>
+            <input id="setupKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+          </div>
+          <div class="fld">
+            <label>保存方式</label>
+            <div class="seg" role="radiogroup">
+              <label><input type="radio" name="saveMode" value="encrypted" checked><span>口令加密</span></label>
+              <label><input type="radio" name="saveMode" value="session"><span>仅本标签页</span></label>
+            </div>
+          </div>
+          <div id="passFields" class="fld-group">
+            <div class="pair">
+              <div class="fld"><label for="setupPass">口令</label><input id="setupPass" type="password" autocomplete="new-password" placeholder="≥ 4 位"></div>
+              <div class="fld"><label for="setupPass2">确认</label><input id="setupPass2" type="password" autocomplete="new-password"></div>
+            </div>
+            <label class="check"><input id="setupRemember" type="checkbox" checked><span></span>本标签页内记住</label>
+          </div>
+          <p class="note" id="setupNote"></p>
+          <button class="btn btn-primary btn-block" id="setupSubmit" type="button">进入</button>
+          <details class="disclose">
+            <summary>加密边界</summary>
+            <p>PBKDF2-SHA256（21 万次）派生密钥，AES-GCM 加密，密文存 localStorage。</p>
+            <p><b>能防</b> 他人翻看本机存储、浏览器同步外泄、Key 误提交进 git。</p>
+            <p><b>不能防</b> XSS 或恶意扩展在解锁状态读取内存明文。静态站点最终必须以明文请求头发送 Key。</p>
+          </details>
+        </section>
+
+        <section class="gate-view" data-view="unlock" hidden>
+          <p class="lede">输入口令解锁本机保存的 Key。</p>
+          <div class="fld"><label for="unlockPass">口令</label><input id="unlockPass" type="password" autocomplete="current-password"></div>
+          <label class="check"><input id="unlockRemember" type="checkbox" checked><span></span>本标签页内记住</label>
+          <p class="note" id="unlockNote"></p>
+          <button class="btn btn-primary btn-block" id="unlockSubmit" type="button">解锁</button>
+          <button class="btn-link centered" id="forgetKey" type="button">清除并重填</button>
+        </section>
+
+        <section class="gate-view" data-view="proxy" hidden>
+          <p class="lede">已检测到本地服务，Key 由后端持有。</p>
+          <p class="note" id="proxyNote"></p>
+          <button class="btn btn-primary btn-block" id="proxyEnter" type="button">进入</button>
+        </section>
+      </div>
+    </div>
+
+    <!-- ══ App ════════════════════════════════════════════════ -->
+    <header class="topbar">
+      <div class="brand">
+        <svg class="ico"><use href="#i-logo" /></svg>
+        <span>Scylla</span>
+      </div>
+      <div class="topbar-end">
+        <span class="chip" id="modeChip"></span>
+        <button class="ibtn" id="histToggle" type="button" aria-pressed="true" data-tip="历史">
+          <svg class="ico"><use href="#i-layers" /></svg>
+        </button>
+        <button class="ibtn" id="lockButton" type="button" data-tip="锁定">
+          <svg class="ico"><use href="#i-lock" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <!-- ── Composer ───────────────────────────────────────── -->
+      <form class="composer" id="form">
+        <div class="composer-scroll">
+          <div class="fld fld-hero">
+            <div class="fld-top">
+              <label for="prompt">描述</label>
+              <button class="ibtn ibtn-xs" id="exampleBtn" type="button" data-tip="填入示例">
+                <svg class="ico"><use href="#i-wand" /></svg>
+              </button>
+            </div>
+            <textarea id="prompt" placeholder="silver hair, moonlit garden, cinematic lighting…" required spellcheck="false"></textarea>
+            <div class="fld-foot"><span id="promptCount">0</span></div>
+          </div>
+
+          <div class="fld">
+            <div class="fld-top"><label for="negative">排除</label></div>
+            <textarea id="negative" rows="2" placeholder="lowres, blurry, watermark…" spellcheck="false"></textarea>
+          </div>
+
+          <div class="fld">
+            <div class="fld-top"><label for="model">模型</label></div>
+            <select id="model"></select>
+          </div>
+
+          <div class="fld">
+            <div class="fld-top">
+              <label>画幅</label>
+              <span class="mono dim" id="pixelMeta"></span>
+            </div>
+            <div class="ratios" id="ratios" role="radiogroup" aria-label="画幅"></div>
+            <div class="pair tight" id="sizeFields" hidden>
+              <div class="fld-inline"><input id="width" type="number" min="64" max="2048" step="64" value="832" aria-label="宽"><span>W</span></div>
+              <div class="fld-inline"><input id="height" type="number" min="64" max="2048" step="64" value="1216" aria-label="高"><span>H</span></div>
+            </div>
+            <p class="hint" id="pixelWarn" hidden></p>
+          </div>
+
+          <details class="drawer" id="advanced">
+            <summary>
+              <span>参数</span>
+              <span class="badge" id="advBadge" hidden></span>
+              <i class="caret" aria-hidden="true"></i>
+            </summary>
+            <div class="drawer-body">
+              <div class="fld"><div class="fld-top"><label for="sampler">采样器</label></div><select id="sampler"></select></div>
+
+              <div class="slider">
+                <div class="slider-top"><label for="steps">步数</label><output class="pill" id="stepsVal">25</output></div>
+                <input id="steps" type="range" min="1" max="50" value="25">
+              </div>
+              <div class="slider">
+                <div class="slider-top"><label for="scale">Scale</label><output class="pill" id="scaleVal">5</output></div>
+                <input id="scale" type="range" min="0" max="20" step="0.5" value="5">
+              </div>
+              <div class="slider">
+                <div class="slider-top"><label for="cfg">CFG</label><output class="pill" id="cfgVal">10</output></div>
+                <input id="cfg" type="range" min="0" max="30" step="0.5" value="10">
+              </div>
+
+              <div class="fld">
+                <div class="fld-top"><label for="seed">Seed</label></div>
+                <div class="seed">
+                  <input id="seed" type="number" min="0" max="4294967295" placeholder="随机">
+                  <button class="ibtn" id="diceBtn" type="button" data-tip="随机 Seed">
+                    <svg class="ico"><use href="#i-dice" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="switches">
+                <label class="check"><input id="localCache" type="checkbox" checked><span></span>加入历史<i class="sub">刷新后清空</i></label>
+                <label class="check"><input id="serverCache" type="checkbox"><span></span>服务端缓存</label>
+                <label class="check"><input id="optimize" type="checkbox"><span></span>压缩体积<i class="sub">转 JPEG</i></label>
+              </div>
+
+              <button class="btn btn-quiet btn-block btn-sm" id="resetAdv" type="button">
+                <svg class="ico"><use href="#i-reset" /></svg>恢复默认
+              </button>
+            </div>
+          </details>
+        </div>
+
+        <div class="composer-foot">
+          <button class="btn btn-primary btn-go" id="goBtn" type="submit">
+            <svg class="ico"><use href="#i-sparkle" /></svg>
+            <span id="goLabel">生成</span>
+            <kbd>⌘↵</kbd>
+          </button>
+          <button class="btn btn-quiet btn-block btn-sm" id="cancelBtn" type="button" hidden>
+            <svg class="ico"><use href="#i-stop" /></svg>取消
+          </button>
+        </div>
+      </form>
+
+      <div class="splitter" id="splitter" role="separator" aria-orientation="vertical"
+           aria-label="调整栏宽" tabindex="0"></div>
+
+      <!-- ── Stage ──────────────────────────────────────────── -->
+      <section class="stage">
+        <div class="stage-head" id="stageHead">
+          <div class="stage-id">
+            <strong id="stageTitle">就绪</strong>
+            <span class="mono dim" id="stageSub"></span>
+          </div>
+          <div class="stage-tools">
+            <button class="ibtn" id="copyBtn" type="button" hidden data-tip="复制描述">
+              <svg class="ico"><use href="#i-copy" /></svg>
+            </button>
+            <button class="ibtn" id="reuseBtn" type="button" hidden data-tip="复用参数">
+              <svg class="ico"><use href="#i-reuse" /></svg>
+            </button>
+            <button class="ibtn ibtn-accent" id="saveBtn" type="button" hidden data-tip="下载">
+              <svg class="ico"><use href="#i-download" /></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="viewport" id="viewport">
+          <div class="layer center" data-layer="empty">
+            <div class="blank">
+              <svg class="ico ico-xl"><use href="#i-image" /></svg>
+              <p class="blank-s">写下描述，按 <kbd>⌘↵</kbd> 生成</p>
+            </div>
+          </div>
+
+          <div class="layer center" data-layer="busy">
+            <div class="print skeleton" id="skeleton">
+              <div class="shimmer"></div>
+              <div class="skeleton-info">
+                <p class="mono" id="timer">0.0s</p>
+                <p class="skeleton-note" id="busyNote"></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="layer center" data-layer="error">
+            <div class="blank">
+              <svg class="ico ico-xl err"><use href="#i-alert" /></svg>
+              <p class="blank-s" id="errBody"></p>
+              <button class="btn btn-quiet btn-sm" id="retryBtn" type="button">
+                <svg class="ico"><use href="#i-retry" /></svg>重试
+              </button>
+            </div>
+          </div>
+
+          <div class="layer center" data-layer="image">
+            <figure class="print" id="print">
+              <img id="image" alt="生成结果" decoding="async">
+              <figcaption class="print-meta mono" id="printMeta"></figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── History rail ───────────────────────────────────── -->
+      <aside class="gallery" id="gallery">
+        <div class="gallery-head">
+          <span class="mono" id="histCount">0</span>
+          <button class="ibtn ibtn-xs" id="clearHist" type="button" hidden data-tip="清空">
+            <svg class="ico"><use href="#i-trash" /></svg>
+          </button>
+        </div>
+        <div class="tray" id="tray"></div>
+        <p class="tray-empty" id="trayEmpty">刷新后不保留</p>
+      </aside>
+    </main>
+
+    <div class="lightbox" id="lightbox" hidden>
+      <img id="lightboxImg" alt="放大查看">
+      <button class="ibtn lightbox-x" id="lightboxClose" type="button" data-tip="关闭">
+        <svg class="ico"><use href="#i-close" /></svg>
+      </button>
+    </div>
+
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>

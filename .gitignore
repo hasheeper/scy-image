@@ -1,0 +1,5 @@
+config/api-key.txt
+outputs/
+node_modules/
+npm-debug.log*
+.DS_Store
