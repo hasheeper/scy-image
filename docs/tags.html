@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
+    <meta name="robots" content="noindex">
+    <title>Danbooru Tag 词典 · Scylla</title>
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./tags.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%23111'/><circle cx='14' cy='14' r='7' fill='none' stroke='%23b3a1ff' stroke-width='2'/><path d='m19.5 19.5 5 5' stroke='%23b3a1ff' stroke-width='2'/></svg>">
+  </head>
+  <body class="tags-body">
+    <svg class="sprite" aria-hidden="true">
+      <defs>
+        <symbol id="i-logo" viewBox="0 0 24 24"><path d="M4 17.5l4-4.5 3 3.5 2.5-3 6.5 8" /><circle cx="9" cy="8" r="1.8" /><rect x="2.5" y="3.5" width="19" height="17" rx="3.5" /></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4 4" /></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5" /><path d="M15 6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15" /></symbol>
+        <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7" /></symbol>
+      </defs>
+    </svg>
+
+    <header class="topbar tags-topbar">
+      <a class="brand tags-brand" href="./index.html">
+        <svg class="ico"><use href="#i-logo" /></svg><span>Scylla</span>
+      </a>
+      <a class="tags-back" href="./index.html"><svg class="ico"><use href="#i-back" /></svg>返回生成器</a>
+    </header>
+
+    <main class="tags-main">
+      <section class="tags-hero">
+        <p class="tags-kicker">DANBOORU TAG DICTIONARY</p>
+        <h1>中文 / 英文 Tag 词典</h1>
+        <p class="tags-lede">输入中文含义或英文 Tag，点击结果即可复制 NAI 可用格式。</p>
+        <form class="tags-search" id="tagSearchForm" role="search">
+          <svg class="ico"><use href="#i-search" /></svg>
+          <input id="tagSearch" type="search" autocomplete="off" spellcheck="false" placeholder="例如：蓝发 / blue hair" aria-label="搜索 Danbooru Tag">
+          <button id="tagSearchButton" type="submit">搜索</button>
+        </form>
+        <div class="tags-examples" aria-label="搜索示例">
+          <span>试试</span>
+          <button type="button" data-query="蓝发">蓝发</button>
+          <button type="button" data-query="猫耳">猫耳</button>
+          <button type="button" data-query="school uniform">school uniform</button>
+        </div>
+      </section>
+
+      <section class="tags-results" aria-live="polite" aria-busy="false">
+        <div class="tags-results-head">
+          <p id="tagStatus">输入关键词开始搜索</p>
+          <span id="tagResultCount"></span>
+        </div>
+        <div class="tags-grid" id="tagResults"></div>
+      </section>
+
+      <footer class="tags-foot">
+        搜索词会发送到在线双语 Tag 服务；英文查询在需要时回退至 Danbooru 官方接口。
+      </footer>
+    </main>
+
+    <div class="tags-toast" id="tagToast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="./js/tags-page.js"></script>
+  </body>
+</html>

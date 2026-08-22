@@ -56,6 +56,9 @@
           <rect x="3" y="4.5" width="18" height="15" rx="3" /><path d="m4 16 4.5-4.5 3 3 2.5-3 6 6" /><circle cx="9" cy="9" r="1.5" />
         </symbol>
         <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.5M12 16v.5" /></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4 4" />
+        </symbol>
       </defs>
     </svg>
 
@@ -122,6 +125,9 @@
       </div>
       <div class="topbar-end">
         <span class="chip" id="modeChip"></span>
+        <a class="ibtn" href="./tags.html" target="_blank" rel="noopener" data-tip="Tag 词典" aria-label="打开 Tag 词典">
+          <svg class="ico"><use href="#i-search" /></svg>
+        </a>
         <button class="ibtn" id="histToggle" type="button" aria-pressed="true" data-tip="历史" aria-label="历史">
           <svg class="ico"><use href="#i-layers" /></svg>
         </button>
@@ -138,17 +144,20 @@
           <div class="fld fld-hero">
             <div class="fld-top">
               <label for="prompt">描述（可选）</label>
-              <button class="ibtn ibtn-xs" id="exampleBtn" type="button" data-tip="填入示例" aria-label="填入示例">
-                <svg class="ico"><use href="#i-wand" /></svg>
-              </button>
+              <div class="fld-actions">
+                <a class="tag-dict-link" href="./tags.html" target="_blank" rel="noopener">Tag 词典</a>
+                <button class="ibtn ibtn-xs" id="exampleBtn" type="button" data-tip="填入示例" aria-label="填入示例">
+                  <svg class="ico"><use href="#i-wand" /></svg>
+                </button>
+              </div>
             </div>
-            <textarea id="prompt" placeholder="可留空，或填写 silver hair, moonlit garden…" spellcheck="false"></textarea>
+            <textarea id="prompt" placeholder="输入中文或英文 Tag，可自动补全" autocomplete="off" spellcheck="false"></textarea>
             <div class="fld-foot"><span id="promptCount">0</span></div>
           </div>
 
           <div class="fld">
             <div class="fld-top"><label for="negative">排除</label></div>
-            <textarea id="negative" rows="2" placeholder="lowres, blurry, watermark…" spellcheck="false"></textarea>
+            <textarea id="negative" rows="2" placeholder="lowres, blurry, watermark…" autocomplete="off" spellcheck="false"></textarea>
           </div>
 
           <div class="fld">

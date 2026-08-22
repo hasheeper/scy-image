@@ -2,6 +2,7 @@ import { vault } from "./vault.js";
 import { detectMode, fetchCatalog, generate, state as api, DEFAULT_MODEL, FALLBACK_MAX_PIXELS } from "./api.js";
 import { history, prefs, makeThumb } from "./store.js";
 import { attach as attachHighlight } from "./highlight.js";
+import { attachTagAutocomplete } from "./tag-autocomplete.js";
 
 const $ = (id) => document.getElementById(id);
 const body = document.body;
@@ -1161,6 +1162,8 @@ async function boot() {
   restore();
   refreshPromptHL = attachHighlight($("prompt"));
   refreshNegativeHL = attachHighlight($("negative"));
+  attachTagAutocomplete($("prompt"));
+  attachTagAutocomplete($("negative"), { maxResults: 8 });
 
   /* The prompt box fills the rail by default; dragging the handle pins it.
      Must run after attach(), which is what creates .hl-wrap. */

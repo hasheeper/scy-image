@@ -74,6 +74,14 @@ npm start   # → http://127.0.0.1:3215
 被拒绝。本站因此采用保守的单并发策略；它只能约束同源标签页和同一个本地服务进程，
 无法替 Scylla 锁住其他设备或其他客户端。
 
+## Danbooru Tag 词典
+
+- 描述与排除输入框支持中文、英文 Tag 自动补全；选择结果后会写入 NAI 使用的空格格式。
+- 顶栏或描述栏的「Tag 词典」可打开独立搜索页，支持中英匹配、分类与使用量展示，
+  点击结果即可复制。
+- 双语结果来自 `tagsuggest.zeabur.app`，英文查询必要时回退 Danbooru 官方自动补全接口。
+  查询词会发送给对应在线服务，不会携带 Scylla API Key 或生成参数。
+
 ## 只支持 NAI
 
 模型列表从 `GET /v1/image/models` 动态获取并过滤为 `provider: novelai`。
@@ -111,11 +119,16 @@ npm start   # → http://127.0.0.1:3215
 ```
 docs/               ← GitHub Pages 根目录
   index.html
+  tags.html          中英 Danbooru Tag 搜索页
   styles.css
+  tags.css           Tag 搜索页样式
   .nojekyll         ← 避免 Jekyll 处理下划线开头的路径
   js/
     app.js          主控：状态机、校验、历史、灯箱
     api.js          传输层：双模式、模型表、失败图识别
+    tag-api.js      双语 Tag 查询 + Danbooru 英文回退
+    tag-autocomplete.js  Prompt 自动补全
+    tags-page.js    独立 Tag 搜索与复制
     highlight.js    NAI 权重语法高亮
     vault.js        Key 加密保管库
     store.js        会话内历史 + 偏好
