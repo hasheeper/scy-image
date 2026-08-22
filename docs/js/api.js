@@ -152,6 +152,21 @@ export async function fetchCatalog({ force = false } = {}) {
 /**
  * @returns {Promise<{blob: Blob, size: {width:number,height:number}|null, ms:number}>}
  */
+/* Only these keys are part of the API contract. `collect()` also carries
+   UI-only fields (e.g. modelName) for the history record, and those must not
+   be sent upstream. */
+const WIRE_KEYS = [
+  "prompt", "negative_prompt", "model", "width", "height",
+  "steps", "sampler", "scale", "cfg", "seed",
+  "optimize", "cache", "transform_prompt"
+];
+
+function toWire(payload) {
+  const out = {};
+  for (const k of WIRE_KEYS) if (payload[k] !== undefined) out[k] = payload[k];
+  return out;
+}
+
 export async function generate(payload, { signal } = {}) {
   const startedAt = performance.now();
 
@@ -162,7 +177,7 @@ export async function generate(payload, { signal } = {}) {
       "Content-Type": "application/json",
       Accept: "image/png, image/jpeg, application/json"
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(toWire(payload)),
     signal
   });
 
