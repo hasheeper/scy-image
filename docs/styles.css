@@ -168,6 +168,17 @@ select option { background: var(--c2); }
 .hint { font-size: var(--fz-sm); line-height: 1.45; color: var(--fg-4); transition: color var(--t1) var(--e); }
 .hint.warn { color: var(--warn); }
 .hint[hidden] { display: none; }
+.fld-inline input:disabled { opacity: 0.52; cursor: not-allowed; }
+
+.quota-warning {
+  display: flex; align-items: flex-start; gap: 7px;
+  padding: 7px 9px;
+  color: var(--warn); background: rgba(224, 171, 104, 0.08);
+  border: 1px solid rgba(224, 171, 104, 0.22); border-radius: var(--r2);
+  font-size: var(--fz-xs); line-height: 1.4;
+}
+.quota-warning[hidden] { display: none; }
+.quota-warning .ico { flex: none; width: 14px; height: 14px; margin-top: 1px; }
 
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
 .pair.tight { gap: var(--s2); }

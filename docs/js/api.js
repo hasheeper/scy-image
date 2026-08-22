@@ -98,6 +98,76 @@ const MODEL_ORDER = [
 export const DEFAULT_MODEL = "nai-diffusion-5-full";
 export const FALLBACK_MAX_PIXELS = 1_048_576;
 
+function quotaNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function shapeQuota(image, stats, temporaryChecked) {
+  const temporary = stats?.temp_limits;
+  return {
+    temporaryChecked,
+    image: image ? {
+      date: String(image.date || ""),
+      used: quotaNumber(image.used),
+      remaining: quotaNumber(image.remaining),
+      limit: quotaNumber(image.limit)
+    } : null,
+    temporary: temporary ? {
+      isTemp: temporary.is_temp === true,
+      limited: temporary.limited === true,
+      used: quotaNumber(temporary.rpd_used),
+      remaining: quotaNumber(temporary.rpd_remaining),
+      limit: quotaNumber(temporary.rpd),
+      resetSeconds: quotaNumber(temporary.reset_seconds)
+    } : null
+  };
+}
+
+async function quotaJson(response) {
+  if (!response.ok) throw new Error(`额度查询失败 (${response.status})`);
+  return response.json();
+}
+
+export async function fetchQuotaStatus() {
+  if (state.mode === "proxy") {
+    const response = await fetch(new URL("quota", API_BASE), {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout?.(10_000)
+    });
+    if (!response.ok) throw new Error(`额度查询失败 (${response.status})`);
+    return response.json();
+  }
+
+  const token = vault.token();
+  if (!token) throw new Error("请先解锁 API Key");
+  const statsUrl = new URL(`${UPSTREAM}/v1/token_stats_data`);
+  statsUrl.searchParams.set("days", "1");
+  // This authenticated stats endpoint does not accept Bearer auth. A fetch
+  // URL is not added to browser history; no-referrer prevents propagation.
+  statsUrl.searchParams.set("api_key", token);
+
+  const [imageResult, statsResult] = await Promise.allSettled([
+    fetch(`${UPSTREAM}/v1/image/quota`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout?.(8_000)
+    }).then(quotaJson),
+    fetch(statsUrl, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+      signal: AbortSignal.timeout?.(8_000)
+    }).then(quotaJson)
+  ]);
+  const image = imageResult.status === "fulfilled" ? imageResult.value : null;
+  const stats = statsResult.status === "fulfilled" ? statsResult.value : null;
+  if (!image && !stats) throw new Error("额度暂不可用");
+  return shapeQuota(image, stats, statsResult.status === "fulfilled");
+}
+
 /**
  * NAI only. The Imagen entries the upstream advertises were tested with
  * aspect_ratio / ratio / width+height / no size at all and every variant came

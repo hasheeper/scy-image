@@ -187,6 +187,63 @@ async function proxyModels(res) {
   }
 }
 
+function quotaNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+async function fetchQuotaJson(url, options) {
+  const response = await fetch(url, options);
+  if (!response.ok) throw new Error(`upstream ${response.status}`);
+  return response.json();
+}
+
+async function proxyQuota(res) {
+  try {
+    const token = await readToken();
+    const statsUrl = new URL(`${UPSTREAM}/v1/token_stats_data`);
+    statsUrl.searchParams.set("days", "1");
+    statsUrl.searchParams.set("api_key", token);
+
+    const [imageResult, statsResult] = await Promise.allSettled([
+      fetchQuotaJson(`${UPSTREAM}/v1/image/quota`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        signal: AbortSignal.timeout(8_000)
+      }),
+      fetchQuotaJson(statsUrl, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8_000)
+      })
+    ]);
+    const image = imageResult.status === "fulfilled" ? imageResult.value : null;
+    const temporary = statsResult.status === "fulfilled"
+      ? statsResult.value?.temp_limits
+      : null;
+    if (!image && !temporary) return json(res, 502, { error: "额度暂不可用" });
+
+    return json(res, 200, {
+      temporaryChecked: statsResult.status === "fulfilled",
+      image: image ? {
+        date: String(image.date || ""),
+        used: quotaNumber(image.used),
+        remaining: quotaNumber(image.remaining),
+        limit: quotaNumber(image.limit)
+      } : null,
+      temporary: temporary ? {
+        isTemp: temporary.is_temp === true,
+        limited: temporary.limited === true,
+        used: quotaNumber(temporary.rpd_used),
+        remaining: quotaNumber(temporary.rpd_remaining),
+        limit: quotaNumber(temporary.rpd),
+        resetSeconds: quotaNumber(temporary.reset_seconds)
+      } : null
+    });
+  } catch {
+    return json(res, 502, { error: "额度暂不可用" });
+  }
+}
+
 async function serveStatic(urlPath, res) {
   const requested = urlPath === "/" ? "index.html" : urlPath.replace(/^\/+/, "");
   const filePath = path.resolve(PUBLIC_DIR, requested);
@@ -221,6 +278,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/image/models") return proxyModels(res);
+  if (req.method === "GET" && url.pathname === "/api/quota") return proxyQuota(res);
   if (req.method === "POST" && url.pathname === "/api/image/generate") return proxyGenerate(req, res);
   if (req.method === "GET") return serveStatic(url.pathname, res);
 

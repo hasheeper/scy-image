@@ -1,9 +1,10 @@
 import { vault } from "./vault.js";
-import { detectMode, fetchCatalog, generate, state as api, DEFAULT_MODEL, FALLBACK_MAX_PIXELS } from "./api.js";
+import { detectMode, fetchCatalog, fetchQuotaStatus, generate, state as api, DEFAULT_MODEL, FALLBACK_MAX_PIXELS } from "./api.js";
 import { history, prefs, makeThumb } from "./store.js";
 import { attach as attachHighlight } from "./highlight.js";
 import { attachTagAutocomplete } from "./tag-autocomplete.js";
 import { convertToNaiPrompt } from "./prompt-converter.js";
+import { quotaPolicy, recordSuccessfulImage } from "./quota-policy.js";
 
 const $ = (id) => document.getElementById(id);
 const body = document.body;
@@ -23,6 +24,8 @@ const DIM_MAX = 2048;
 const BATCH_MAX = 24;
 const UINT32_RANGE = 4_294_967_296;
 const GENERATION_LOCK = "scylla-image-generation-v1";
+const QUOTA_TTL = 60_000;
+const BATCH_HINT = "严格逐张请求；失败或取消时停止剩余队列。";
 
 const DEFAULTS = {
   sampler: "k_euler_ancestral",
@@ -47,6 +50,14 @@ let ticker = null;
 let current = null;
 let jobActive = false;
 let cancelRequested = false;
+let quotaPreflightActive = false;
+let quotaStatus = null;
+let quotaFetchedAt = 0;
+let quotaRequest = null;
+let quotaResetTimer = null;
+let quotaLoading = false;
+let batchRestricted = false;
+let requestedBatchCount = DEFAULTS.batchCount;
 const urls = new Map();
 
 /* ── toast ─────────────────────────────────────────────────── */
@@ -306,22 +317,121 @@ function syncPromptCount() {
   $("promptCount").textContent = String($("prompt").value.length);
 }
 
-function batchCount() {
-  const n = Math.floor(Number($("batchCount").value));
+function normalizedBatchCount(value) {
+  const n = Math.floor(Number(value));
   return Number.isFinite(n) ? Math.min(BATCH_MAX, Math.max(1, n)) : DEFAULTS.batchCount;
 }
 
+function batchCount() {
+  return batchRestricted ? 1 : normalizedBatchCount($("batchCount").value);
+}
+
+function setRequestedBatchCount(value) {
+  requestedBatchCount = normalizedBatchCount(value);
+  $("batchCount").value = String(batchRestricted ? 1 : requestedBatchCount);
+}
+
 function commitBatchCount() {
-  const n = batchCount();
-  $("batchCount").value = String(n);
+  if (!batchRestricted) requestedBatchCount = normalizedBatchCount($("batchCount").value);
+  $("batchCount").value = String(batchRestricted ? 1 : requestedBatchCount);
   syncAdvBadge();
   syncGenerateLabel();
   persist();
-  return n;
+  return batchCount();
 }
 
 function syncGenerateLabel() {
   if (!jobActive) $("goLabel").textContent = `生成 ×${batchCount()}`;
+}
+
+function quotaValue(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "—";
+  return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(1)));
+}
+
+function syncQuotaControls({ announce = false } = {}) {
+  const policy = quotaPolicy(quotaStatus);
+  const wasRestricted = batchRestricted;
+  if (!wasRestricted && policy.serialDisabled) {
+    requestedBatchCount = normalizedBatchCount($("batchCount").value);
+  }
+  batchRestricted = policy.serialDisabled;
+
+  const input = $("batchCount");
+  input.disabled = batchRestricted;
+  input.value = String(batchRestricted ? 1 : requestedBatchCount);
+  $("batchRange").textContent = policy.serialUnavailable
+    ? (quotaLoading ? "校验中" : "额度未知")
+    : batchRestricted ? "仅单张" : "1–24 张";
+  $("batchHint").textContent = policy.serialUnavailable
+    ? quotaLoading
+      ? "正在读取临时 Key 全局日额度，串行暂不可用。"
+      : "临时 Key 全局日额度暂不可用，为避免超额，串行已关闭。"
+    : batchRestricted
+      ? `临时 Key 全局日额度剩余 ${quotaValue(policy.tempRemaining)}，低于 300，仅允许单张生成。`
+      : BATCH_HINT;
+  $("batchHint").classList.toggle("warn", batchRestricted);
+
+  const warning = $("quotaWarning");
+  warning.hidden = !policy.warning;
+  $("quotaWarningText").textContent = policy.warning
+    ? `额度提醒：图片已用 ${quotaValue(policy.imageUsed)}；临时 Key 全局日额度仅剩 ${quotaValue(policy.tempRemaining)}，串行批量已关闭。`
+    : "";
+
+  syncAdvBadge();
+  syncGenerateLabel();
+  if (announce && !wasRestricted && batchRestricted) {
+    toast(policy.serialUnavailable
+      ? "全局额度暂不可用，串行批量已关闭"
+      : "临时 Key 全局日额度低于 300，串行批量已关闭");
+  }
+}
+
+function scheduleQuotaResetRefresh() {
+  clearTimeout(quotaResetTimer);
+  quotaResetTimer = null;
+  const resetSeconds = Number(quotaStatus?.temporary?.resetSeconds);
+  if (!batchRestricted || !Number.isFinite(resetSeconds) || resetSeconds <= 0) return;
+  quotaResetTimer = setTimeout(() => {
+    quotaResetTimer = null;
+    void refreshQuota({ force: true, announce: true });
+  }, Math.min(2_147_000_000, (resetSeconds + 2) * 1000));
+}
+
+async function refreshQuota({ force = false, announce = false } = {}) {
+  if (!force && quotaStatus && !quotaPolicy(quotaStatus).serialUnavailable
+      && Date.now() - quotaFetchedAt < QUOTA_TTL) return quotaStatus;
+  if (quotaRequest) return quotaRequest;
+
+  quotaLoading = true;
+  syncQuotaControls();
+  quotaRequest = fetchQuotaStatus()
+    .then((status) => {
+      quotaStatus = status;
+      quotaFetchedAt = Date.now();
+      quotaLoading = false;
+      syncQuotaControls({ announce });
+      scheduleQuotaResetRefresh();
+      return status;
+    })
+    .catch(() => {
+      quotaLoading = false;
+      quotaStatus = {
+        ...(quotaStatus || {}),
+        temporaryChecked: false
+      };
+      syncQuotaControls({ announce });
+      return quotaStatus;
+    })
+    .finally(() => { quotaRequest = null; });
+  return quotaRequest;
+}
+
+function noteSuccessfulImageQuota() {
+  if (!quotaStatus) return;
+  quotaStatus = recordSuccessfulImage(quotaStatus);
+  syncQuotaControls({ announce: true });
 }
 
 /* ── prefs ─────────────────────────────────────────────────── */
@@ -333,7 +443,7 @@ function persist() {
     width: Number($("width").value), height: Number($("height").value),
     steps: Number($("steps").value), scale: Number($("scale").value), cfg: Number($("cfg").value),
     seed: $("seed").value,
-    batchCount: batchCount(),
+    batchCount: requestedBatchCount,
     optimize: $("optimize").checked, serverCache: $("serverCache").checked,
     localCache: $("localCache").checked
   });
@@ -356,7 +466,7 @@ function restore() {
   if (s.scale != null) $("scale").value = s.scale;
   if (s.cfg != null) $("cfg").value = s.cfg;
   if (s.seed != null) $("seed").value = s.seed;
-  if (s.batchCount != null) $("batchCount").value = Math.min(BATCH_MAX, Math.max(1, Math.floor(Number(s.batchCount)) || 1));
+  setRequestedBatchCount(s.batchCount ?? requestedBatchCount);
   $("optimize").checked = s.optimize ?? DEFAULTS.optimize;
   $("serverCache").checked = s.serverCache ?? DEFAULTS.serverCache;
   $("localCache").checked = s.localCache ?? DEFAULTS.localCache;
@@ -681,11 +791,19 @@ async function runBatch(base) {
   const total = base.batchCount;
   const typical = typicalMs(history.all());
   let completed = 0;
+  let quotaStopped = false;
   const completedRecords = [];
   startTimer();
   try {
     for (let index = 0; index < total; index += 1) {
       if (cancelRequested) throw new DOMException("已取消", "AbortError");
+      if (index > 0) {
+        if (!batchRestricted) await refreshQuota({ force: true, announce: true });
+        if (batchRestricted) {
+          quotaStopped = true;
+          break;
+        }
+      }
 
       const params = paramsForBatchItem(base, index, total);
       controller = new AbortController();
@@ -722,6 +840,19 @@ async function runBatch(base) {
       completed += 1;
       completedRecords.push(record);
       showEntry(record);
+      noteSuccessfulImageQuota();
+      if (batchRestricted && completed < total) {
+        quotaStopped = true;
+        break;
+      }
+    }
+
+    if (quotaStopped) {
+      $("stageTitle").textContent = "额度保护已停止串行";
+      $("stageSub").textContent = `已完成 ${completed}/${total}`;
+      $("busyNote").textContent = "临时 Key 全局日额度低于 300，未再提交后续请求";
+      setState("done");
+      return;
     }
 
     if (total > 1) {
@@ -791,7 +922,17 @@ async function withGenerationLock(task) {
 }
 
 async function run() {
-  if (jobActive) { toast("已有生成任务，请先等待或取消"); return; }
+  if (jobActive || quotaPreflightActive) { toast("已有生成任务，请先等待或取消"); return; }
+  quotaPreflightActive = true;
+  $("goBtn").disabled = true;
+  $("goLabel").textContent = "检查额度…";
+  try {
+    await refreshQuota({ force: true, announce: true });
+  } finally {
+    quotaPreflightActive = false;
+    syncGenerateLabel();
+  }
+  if (jobActive) return;
   if (!validateSize()) return;
 
   commitBatchCount();
@@ -888,7 +1029,10 @@ for (const id of ["optimize", "serverCache", "localCache"]) {
   $(id).addEventListener("change", () => { syncAdvBadge(); persist(); });
 }
 $("seed").addEventListener("input", () => { syncAdvBadge(); persistSoon(); });
-$("batchCount").addEventListener("input", () => { syncAdvBadge(); syncGenerateLabel(); persistSoon(); });
+$("batchCount").addEventListener("input", () => {
+  if (!batchRestricted) requestedBatchCount = normalizedBatchCount($("batchCount").value);
+  syncAdvBadge(); syncGenerateLabel(); persistSoon();
+});
 $("batchCount").addEventListener("change", commitBatchCount);
 $("batchCount").addEventListener("keydown", (event) => {
   if (event.key === "Enter") { event.preventDefault(); commitBatchCount(); }
@@ -905,7 +1049,7 @@ $("resetAdv").addEventListener("click", () => {
   $("scale").value = DEFAULTS.scale;
   $("cfg").value = DEFAULTS.cfg;
   $("seed").value = "";
-  $("batchCount").value = DEFAULTS.batchCount;
+  setRequestedBatchCount(DEFAULTS.batchCount);
   $("optimize").checked = DEFAULTS.optimize;
   $("serverCache").checked = DEFAULTS.serverCache;
   $("localCache").checked = DEFAULTS.localCache;
@@ -946,7 +1090,7 @@ $("reuseBtn").addEventListener("click", () => {
   $("cfg").value = p.cfg;
   if (catalog.samplers.includes(p.sampler)) $("sampler").value = p.sampler;
   $("seed").value = p.isComparison ? (p.seedStart ?? "") : (p.seed ?? "");
-  $("batchCount").value = Math.min(BATCH_MAX, Math.max(1, p.batchTotal || p.batchCount || 1));
+  setRequestedBatchCount(p.batchTotal || p.batchCount || 1);
   customMode = !RATIOS.some((r) => !r.custom && r.w === p.width && r.h === p.height);
   refreshHighlights();
   syncRangeLabels(); syncModelHint(); syncAdvBadge(); syncGenerateLabel(); syncPromptCount(); sizeSkeleton(); persist();
@@ -1134,6 +1278,12 @@ $("proxyEnter").addEventListener("click", () => enterApp());
 /* ── boot ──────────────────────────────────────────────────── */
 async function enterApp() {
   hideGate();
+  quotaStatus = null;
+  quotaFetchedAt = 0;
+  quotaLoading = true;
+  clearTimeout(quotaResetTimer);
+  quotaResetTimer = null;
+  syncQuotaControls();
   const proxied = api.mode === "proxy";
   // With a local backend the browser never holds the key, so there is
   // nothing to lock.
@@ -1167,6 +1317,7 @@ async function enterApp() {
   setState("empty");
   measureFit();
   $("prompt").focus();
+  void refreshQuota({ force: true });
 }
 
 async function boot() {

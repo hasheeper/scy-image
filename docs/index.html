@@ -218,13 +218,13 @@
               <div class="fld">
                 <div class="fld-top">
                   <label for="batchCount">串行批量</label>
-                  <span class="mono dim">1–24 张</span>
+                  <span class="mono dim" id="batchRange">1–24 张</span>
                 </div>
                 <div class="fld-inline">
-                  <input id="batchCount" type="number" min="1" max="24" step="1" value="1" inputmode="numeric">
+                  <input id="batchCount" type="number" min="1" max="24" step="1" value="1" inputmode="numeric" aria-describedby="batchHint quotaWarningText">
                   <span>张</span>
                 </div>
-                <p class="hint">严格逐张请求；失败或取消时停止剩余队列。</p>
+                <p class="hint" id="batchHint">严格逐张请求；失败或取消时停止剩余队列。</p>
               </div>
 
               <div class="switches">
@@ -241,6 +241,10 @@
         </div>
 
         <div class="composer-foot">
+          <div class="quota-warning" id="quotaWarning" role="status" hidden>
+            <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+            <span id="quotaWarningText"></span>
+          </div>
           <button class="btn btn-primary btn-go" id="goBtn" type="submit">
             <svg class="ico"><use href="#i-sparkle" /></svg>
             <span id="goLabel">生成 ×1</span>
