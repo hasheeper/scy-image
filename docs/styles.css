@@ -949,24 +949,108 @@ body[data-zoom="on"] .lightbox img { transform: none; }
 @keyframes toastOut { to { opacity: 0; transform: translateY(4px); } }
 
 /* ── Responsive ──────────────────────────────────────────────── */
-@media (max-width: 980px) {
-  .shell { grid-template-columns: 1fr; height: auto; }
-  .stage { order: 1; }
-  .composer { order: 2; border-right: 0; border-top: 1px solid var(--line); }
-  .composer-scroll { overflow: visible; }
-  .viewport { min-height: 54vh; padding: var(--s4); }
-  .composer-foot { position: sticky; bottom: 0; z-index: 5; }
+/* ── Tablet / narrow desktop ──────────────────────────────────── */
+@media (max-width: 1080px) {
+  :root { --rail: 280px; --hist: 112px; }
 }
 
-@media (max-width: 560px) {
-  .topbar, .stage-head { padding: 0 var(--s3); }
-  .composer-scroll { padding: var(--s4) var(--s3); }
-  .composer-foot { padding: var(--s3); }
-  .viewport { padding: var(--s3); min-height: 46vh; }
-  .gallery { padding: var(--s2) var(--s3) var(--s3); }
-  .ratios { grid-template-columns: repeat(4, 1fr); }
+/* ── Mobile: single column, stage first, controls in a sheet ───── */
+@media (max-width: 860px) {
+  :root { --ico: 17px; }          /* larger touch targets */
+
+  /* dvh avoids the iOS/Android URL-bar height jump */
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+    min-height: calc(100dvh - 42px);
+  }
+  .splitter { display: none; }     /* no pointer to drag with */
+
+  /* image first — it is the reason the page exists */
+  .stage { order: 1; }
+  .stage-head { position: sticky; top: 42px; z-index: 12; background: var(--c0); }
+  .viewport { height: min(58dvh, 460px); padding: var(--s3); }
+
+  /* history becomes a horizontal filmstrip under the image */
+  .gallery {
+    order: 2;
+    display: flex; flex-direction: row; align-items: center;
+    gap: var(--s2);
+    border-left: 0; border-top: 1px solid var(--line);
+    padding: var(--s2) var(--s3);
+    min-height: 0;
+  }
+  body[data-hist="off"] .gallery { display: none; }
+  .gallery-head {
+    height: auto; flex: none; padding: 0;
+    border-bottom: 0; flex-direction: column; gap: 2px;
+  }
+  .tray {
+    flex: 1 1 auto; flex-direction: row;
+    padding: 0; gap: var(--s2);
+    overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x proximity;
+  }
+  .tile { width: auto; height: 54px; scroll-snap-align: start; }
+  .tile img { width: auto; height: 100%; }
+  .tray-empty { flex: 1 1 auto; padding: 0; text-align: left; }
+
+  /* composer scrolls with the document; no nested scrollport on touch */
+  .composer {
+    order: 3;
+    border-right: 0; border-top: 1px solid var(--line);
+    display: block;
+  }
+  .composer-scroll { overflow: visible; padding: var(--s4) var(--s3); }
+  .fld-hero { min-height: 0; }
+  .fld-hero .hl-wrap { height: auto; min-height: 128px; max-height: 42dvh; }
+
+  /* action bar pinned above the home indicator */
+  .composer-foot {
+    position: sticky; bottom: 0; z-index: 10;
+    padding: var(--s2) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--c0) 94%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+  }
+  .btn-go { height: 44px; }        /* 44px = comfortable tap target */
+
+  .topbar { padding: 0 var(--s3); }
+  .ibtn { width: 34px; height: 34px; }
+  .ibtn-xs { width: 28px; height: 28px; }
+  .check { min-height: 32px; }
+  input[type="range"] { height: 28px; }
+  .ratio { padding: 10px 4px 8px; }
+
+  /* full-bleed sheet instead of a floating dialog */
+  .gate { padding: 0; align-items: stretch; }
+  .gate-card {
+    width: 100%; max-height: none; min-height: 100dvh;
+    border: 0; border-radius: 0;
+    padding: var(--s5) var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));
+    align-content: start;
+  }
+
+  .toasts { bottom: calc(var(--s3) + env(safe-area-inset-bottom)); }
+  .lightbox { padding: var(--s3); }
+  .lightbox-x { top: calc(var(--s3) + env(safe-area-inset-top)); right: var(--s3); }
+}
+
+@media (max-width: 480px) {
+  .ratios { grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .pair { grid-template-columns: 1fr 1fr; }
   .stage-id span { display: none; }
-  .stage-tools .btn span { display: none; }
+  .viewport { height: min(52dvh, 380px); }
+  .seg { grid-auto-flow: row; }
+}
+
+/* Tooltips are hover-only affordances; on touch they fire on tap and linger,
+   so suppress them and rely on aria-label instead. */
+@media (hover: none) {
+  [data-tip]::after { content: none; }
+  .tile-x { opacity: 1; }          /* no hover to reveal the delete button */
+  .print-meta { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

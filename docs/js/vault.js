@@ -184,9 +184,16 @@ export const vault = {
     return unlockedToken;
   },
 
+  /**
+   * Drop the in-memory token and anything that could restore it without the
+   * passphrase. In "session" mode there is no passphrase to re-enter, so the
+   * stored plaintext must go too — otherwise tryResume() would silently let
+   * the next page load straight back in and locking would be a no-op.
+   */
   lock() {
     unlockedToken = null;
     sessionStorage.removeItem(SS_DK);
+    sessionStorage.removeItem(SS_TOKEN);
   },
 
   forget() {

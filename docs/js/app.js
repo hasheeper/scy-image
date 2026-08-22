@@ -66,13 +66,14 @@ let fitW = 0;
 let fitH = 0;
 
 function measureFit() {
-  const stage = document.querySelector(".stage");
-  const head = $("stageHead");
-  if (!stage) return;
+  const vp = $("viewport");
+  if (!vp) return;
 
-  const pad = 24 * 2; // .viewport padding, both sides
-  const w = Math.floor(stage.clientWidth - pad);
-  const h = Math.floor(stage.clientHeight - (head?.offsetHeight || 48) - pad);
+  // Read the real padding: it differs between desktop and mobile breakpoints,
+  // and a hardcoded value made the image compute too small on phones.
+  const cs = getComputedStyle(vp);
+  const w = Math.floor(vp.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+  const h = Math.floor(vp.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom));
   if (w <= 0 || h <= 0) return;
   if (w === fitW && h === fitH) return; // idempotent: breaks any resize loop
 
@@ -673,7 +674,13 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-$("lockButton").addEventListener("click", () => { vault.lock(); location.reload(); });
+$("lockButton").addEventListener("click", () => {
+  // Session mode has no passphrase, so locking discards the key entirely and
+  // the user must paste it again. Say so before doing it.
+  if (vault.mode() === "session" && !confirm("仅本标签页模式没有口令，锁定会清除 Key，需要重新填写。继续？")) return;
+  vault.lock();
+  location.reload();
+});
 
 /* Flush any debounced write before the page goes away, so refreshing right
    after typing cannot lose the last few hundred milliseconds. */
@@ -721,11 +728,17 @@ $("splitter").addEventListener("keydown", (event) => {
   if (event.key === "ArrowRight") { event.preventDefault(); setRail(width + step); }
 });
 
-/* Observe .stage: it is driven by the window and the two rails, never by its
-   own content, so this cannot feed back into itself. */
-const stageEl = document.querySelector(".stage");
-if (stageEl) new ResizeObserver(measureFit).observe(stageEl);
+/* Observe the viewport itself. It is `overflow:hidden` and its size comes from
+   the layout above it, never from its contents, so this cannot feed back into
+   itself; measureFit() is also idempotent as a second line of defence.
+   `visualViewport` catches mobile URL-bar collapse, which does not always
+   fire a window resize. */
+const roTargets = [document.querySelector(".stage"), $("viewport")].filter(Boolean);
+const ro = new ResizeObserver(measureFit);
+for (const el of roTargets) ro.observe(el);
 window.addEventListener("resize", measureFit);
+window.addEventListener("orientationchange", () => setTimeout(measureFit, 250));
+visualViewport?.addEventListener("resize", measureFit);
 
 /* ── gate handlers ─────────────────────────────────────────── */
 for (const radio of document.querySelectorAll('input[name="saveMode"]')) {
@@ -780,6 +793,10 @@ $("proxyEnter").addEventListener("click", () => enterApp());
 async function enterApp() {
   hideGate();
   const proxied = api.mode === "proxy";
+  // With a local backend the browser never holds the key, so there is
+  // nothing to lock.
+  $("lockButton").hidden = proxied;
+  $("lockButton").dataset.tip = vault.mode() === "session" ? "清除 Key" : "锁定（下次需口令）";
   $("modeChip").textContent = proxied ? "本地代理" : "浏览器直连";
   $("modeChip").title = proxied
     ? "Key 由本地服务持有,浏览器不接触明文"

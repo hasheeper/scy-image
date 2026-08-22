@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="color-scheme" content="dark">
     <meta name="robots" content="noindex">
     <title>Scylla</title>
@@ -122,10 +122,10 @@
       </div>
       <div class="topbar-end">
         <span class="chip" id="modeChip"></span>
-        <button class="ibtn" id="histToggle" type="button" aria-pressed="true" data-tip="历史">
+        <button class="ibtn" id="histToggle" type="button" aria-pressed="true" data-tip="历史" aria-label="历史">
           <svg class="ico"><use href="#i-layers" /></svg>
         </button>
-        <button class="ibtn" id="lockButton" type="button" data-tip="锁定">
+        <button class="ibtn" id="lockButton" type="button" data-tip="锁定" aria-label="锁定">
           <svg class="ico"><use href="#i-lock" /></svg>
         </button>
       </div>
@@ -138,7 +138,7 @@
           <div class="fld fld-hero">
             <div class="fld-top">
               <label for="prompt">描述</label>
-              <button class="ibtn ibtn-xs" id="exampleBtn" type="button" data-tip="填入示例">
+              <button class="ibtn ibtn-xs" id="exampleBtn" type="button" data-tip="填入示例" aria-label="填入示例">
                 <svg class="ico"><use href="#i-wand" /></svg>
               </button>
             </div>
@@ -195,7 +195,7 @@
                 <div class="fld-top"><label for="seed">Seed</label></div>
                 <div class="seed">
                   <input id="seed" type="number" min="0" max="4294967295" placeholder="随机">
-                  <button class="ibtn" id="diceBtn" type="button" data-tip="随机 Seed">
+                  <button class="ibtn" id="diceBtn" type="button" data-tip="随机 Seed" aria-label="随机 Seed">
                     <svg class="ico"><use href="#i-dice" /></svg>
                   </button>
                 </div>
@@ -237,13 +237,13 @@
             <span class="mono dim" id="stageSub"></span>
           </div>
           <div class="stage-tools">
-            <button class="ibtn" id="copyBtn" type="button" hidden data-tip="复制描述">
+            <button class="ibtn" id="copyBtn" type="button" hidden data-tip="复制描述" aria-label="复制描述">
               <svg class="ico"><use href="#i-copy" /></svg>
             </button>
-            <button class="ibtn" id="reuseBtn" type="button" hidden data-tip="复用参数">
+            <button class="ibtn" id="reuseBtn" type="button" hidden data-tip="复用参数" aria-label="复用参数">
               <svg class="ico"><use href="#i-reuse" /></svg>
             </button>
-            <button class="ibtn ibtn-accent" id="saveBtn" type="button" hidden data-tip="下载">
+            <button class="ibtn ibtn-accent" id="saveBtn" type="button" hidden data-tip="下载" aria-label="下载">
               <svg class="ico"><use href="#i-download" /></svg>
             </button>
           </div>
@@ -290,7 +290,7 @@
       <aside class="gallery" id="gallery">
         <div class="gallery-head">
           <span class="mono" id="histCount">0</span>
-          <button class="ibtn ibtn-xs" id="clearHist" type="button" hidden data-tip="清空">
+          <button class="ibtn ibtn-xs" id="clearHist" type="button" hidden data-tip="清空" aria-label="清空">
             <svg class="ico"><use href="#i-trash" /></svg>
           </button>
         </div>
@@ -301,7 +301,7 @@
 
     <div class="lightbox" id="lightbox" hidden>
       <img id="lightboxImg" alt="放大查看">
-      <button class="ibtn lightbox-x" id="lightboxClose" type="button" data-tip="关闭">
+      <button class="ibtn lightbox-x" id="lightboxClose" type="button" data-tip="关闭" aria-label="关闭">
         <svg class="ico"><use href="#i-close" /></svg>
       </button>
     </div>
