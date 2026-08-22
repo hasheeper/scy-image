@@ -889,14 +889,6 @@ $("resetAdv").addEventListener("click", () => {
   syncRangeLabels(); syncAdvBadge(); syncGenerateLabel(); persist();
 });
 
-$("exampleBtn").addEventListener("click", () => {
-  $("prompt").value = "1girl, solo, silver hair, violet eyes, black dress, moonlit garden, cinematic lighting, intricate details, masterpiece, best quality";
-  $("negative").value = "lowres, blurry, bad anatomy, extra fingers, text, watermark, jpeg artifacts";
-  refreshHighlights();
-  syncPromptCount(); persist();
-  $("prompt").focus();
-});
-
 $("saveBtn").addEventListener("click", () => {
   if (!current) return;
   const ext = current.blob.type.includes("jpeg") ? "jpg" : "png";
@@ -1163,7 +1155,7 @@ async function boot() {
   refreshPromptHL = attachHighlight($("prompt"));
   refreshNegativeHL = attachHighlight($("negative"));
   attachTagAutocomplete($("prompt"));
-  attachTagAutocomplete($("negative"), { maxResults: 8 });
+  attachTagAutocomplete($("negative"));
 
   /* The prompt box fills the rail by default; dragging the handle pins it.
      Must run after attach(), which is what creates .hl-wrap. */

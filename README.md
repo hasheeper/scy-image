@@ -76,9 +76,12 @@ npm start   # → http://127.0.0.1:3215
 
 ## Danbooru Tag 词典
 
-- 描述与排除输入框支持中文、英文 Tag 自动补全；选择结果后会写入 NAI 使用的空格格式。
+- 描述与排除输入框支持中文、英文 Tag 自动补全；按热度最多显示 20 条，浮层内可滚动。
 - 顶栏或描述栏的「Tag 词典」可打开独立搜索页，支持中英匹配、分类与使用量展示，
-  点击结果即可复制。
+  每页 25 条且可持续翻页；可复制单个 Tag 或打开对应 Danbooru 作品页。
+- 搜索结果可加入 Prompt 组合侧栏，逐项设置权重并一次复制完整组合。
+- 类型筛选会在搜索页和输入补全之间同步；通用、作品、角色默认开启，画师与元数据
+  默认关闭，可按需开启。
 - 双语结果来自 `tagsuggest.zeabur.app`，英文查询必要时回退 Danbooru 官方自动补全接口。
   查询词会发送给对应在线服务，不会携带 Scylla API Key 或生成参数。
 
@@ -128,7 +131,7 @@ docs/               ← GitHub Pages 根目录
     api.js          传输层：双模式、模型表、失败图识别
     tag-api.js      双语 Tag 查询 + Danbooru 英文回退
     tag-autocomplete.js  Prompt 自动补全
-    tags-page.js    独立 Tag 搜索与复制
+    tags-page.js    Tag 搜索、分页与 Prompt 组合
     highlight.js    NAI 权重语法高亮
     vault.js        Key 加密保管库
     store.js        会话内历史 + 偏好

@@ -175,14 +175,6 @@ export function attach(textarea) {
   // Both children share one grid cell, so the grid keeps their boxes equal —
   // no explicit height syncing needed, which avoids another source of drift.
 
-  /* Overlays that were siblings of the textarea (e.g. the character counter)
-     must move inside the wrapper. Left outside they become extra grid items
-     in the parent and push it into an implicit third row, which breaks the
-     field's height. */
-  for (const overlay of [...wrap.parentElement.querySelectorAll(":scope > .fld-foot")]) {
-    wrap.append(overlay);
-  }
-
   /* Synchronous on purpose. Deferring to requestAnimationFrame put the blocks
      a frame behind the caret, which reads as lag while typing. Repainting is
      cheap because the mirror is a leaf with `contain` applied. */
