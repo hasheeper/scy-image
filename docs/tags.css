@@ -1,232 +1,456 @@
+/* ══ Danbooru Tag dictionary ═══════════════════════════════════
+   Page-specific layout only. Buttons, badges, toasts, inputs and the
+   focus ring all come from styles.css so both pages stay one product;
+   anything defined here is either a layout concern or a genuine variant.
+   Spacing uses the shared --s* ladder — the earlier hand-picked pixel
+   values were what made this page read as a different codebase.
+   Breakpoints mirror styles.css (1080 / 860 / 480); diverging by 40px
+   left the topbar in its desktop size while the body had gone mobile. */
+
 .tags-body {
-  min-height: 100%; height: auto;
+  min-height: 100%;
+  height: auto;
   background:
-    radial-gradient(760px 380px at 46% -140px, rgba(179,161,255,.09), transparent 72%),
+    radial-gradient(760px 380px at 46% -140px, var(--a-glow), transparent 72%),
     var(--c0);
 }
-.tags-topbar { position: sticky; background: color-mix(in srgb, var(--c0) 91%, transparent); backdrop-filter: blur(14px); }
-.tags-brand { text-decoration: none; }
-.tags-back {
-  display: inline-flex; align-items: center; gap: 5px;
-  color: var(--fg-3); font-size: var(--fz-sm); text-decoration: none;
-  transition: color var(--t1) var(--e);
+.tags-topbar {
+  background: color-mix(in srgb, var(--c0) 91%, transparent);
+  backdrop-filter: blur(16px);
 }
-.tags-back:hover { color: var(--fg); }
+.tags-brand { text-decoration: none; }
+.tags-back { text-decoration: none; }
 
+/* ── Layout ──────────────────────────────────────────────────── */
 .tags-main {
-  width: min(1180px, calc(100% - 32px)); margin: 0 auto;
-  padding: clamp(34px, 5vw, 58px) 0 36px;
-  display: grid; grid-template-columns: minmax(0, 1fr) 300px; align-items: start; gap: 22px;
+  width: min(1180px, calc(100% - var(--s8)));
+  margin: 0 auto;
+  padding: clamp(var(--s8), 5vw, 58px) 0 var(--s10);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--cart);
+  align-items: start;
+  gap: var(--s6);
 }
 .tags-content { min-width: 0; }
-.tags-hero { width: 100%; }
-.tags-kicker { margin-bottom: 8px; color: var(--a); font: 500 9px/1.4 var(--mono); letter-spacing: .14em; }
-.tags-hero h1 { font-size: clamp(25px, 4vw, 34px); line-height: 1.2; letter-spacing: -.035em; }
-.tags-lede { margin-top: 9px; color: var(--fg-3); font-size: var(--fz-md); }
 
+/* ── Hero ────────────────────────────────────────────────────── */
+.tags-hero { width: 100%; }
+.tags-kicker {
+  margin-bottom: var(--s2);
+  color: var(--a);
+  font: 500 var(--fz-xs)/1.4 var(--mono);
+  letter-spacing: 0.14em;
+}
+.tags-hero h1 {
+  font-size: clamp(25px, 4vw, 34px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+.tags-lede { margin-top: var(--s2); color: var(--fg-3); font-size: var(--fz-md); }
+
+/* ── Search ──────────────────────────────────────────────────── */
+/* A composed field: the wrapper owns the chrome and focus ring so the
+   inner input, icon and submit button read as one control. */
 .tags-search {
-  position: relative; display: flex; align-items: center;
-  margin-top: 24px; min-height: 50px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: var(--s6);
+  min-height: 50px;
   background: color-mix(in srgb, var(--c1) 95%, transparent);
-  border: 1px solid var(--line-2); border-radius: var(--r3);
-  box-shadow: 0 14px 46px -28px rgba(0,0,0,.95), 0 1px 0 rgba(255,255,255,.025) inset;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-2), var(--sh-lip);
   transition: border-color var(--t1) var(--e), box-shadow var(--t1) var(--e);
 }
-.tags-search:focus-within { border-color: var(--a-line); box-shadow: 0 0 0 3px var(--a-dim), 0 14px 46px -28px rgba(0,0,0,.95); }
-.tags-search > .ico { margin-left: 14px; color: var(--fg-4); }
+.tags-search:focus-within {
+  border-color: var(--a-line);
+  box-shadow: var(--ring), var(--sh-2);
+}
+.tags-search > .ico { margin-left: var(--s4); color: var(--fg-4); }
 .tags-search input[type="search"] {
-  flex: 1; width: auto; min-height: 48px; padding: 10px 11px;
-  background: transparent; border: 0; box-shadow: none; font-size: var(--fz-lg);
+  flex: 1;
+  width: auto;
+  min-height: 48px;
+  padding: 10px var(--s3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r3);
+  box-shadow: none;
+  font-size: var(--fz-lg);
 }
-.tags-search input[type="search"]:focus { background: transparent; box-shadow: none; }
-.tags-search input::-webkit-search-cancel-button { opacity: .45; }
-.tags-search button {
-  align-self: stretch; margin: 5px; min-width: 66px; padding: 0 15px;
-  color: var(--a-ink); background: var(--a); border-radius: var(--r2); font-weight: 600;
-  transition: background var(--t1) var(--e), transform var(--t1) var(--e);
-}
-.tags-search button:hover { background: #c1b2ff; }
-.tags-search button:active { transform: scale(.97); }
-.tags-search button:disabled { color: var(--fg-4); background: var(--c3); cursor: wait; }
+.tags-search input:hover:not(:focus),
+.tags-search input:focus { background: transparent; box-shadow: none; }
+.tags-search .btn { align-self: stretch; margin: var(--s1); min-width: 66px; }
 
+/* ── Category filters ────────────────────────────────────────── */
 .tags-filters {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-  margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--s5);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
 }
 .tags-filter-label { margin-right: 2px; color: var(--fg-4); font-size: var(--fz-xs); }
 .tag-filter {
-  display: inline-flex; align-items: center; gap: 6px;
-  min-height: 28px; padding: 4px 9px;
-  color: var(--fg-4); background: transparent; border: 1px solid var(--line); border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: var(--s1) 9px;
+  color: var(--fg-4);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 20px;
   font-size: var(--fz-xs);
-  transition: color var(--t1) var(--e), background var(--t1) var(--e), border-color var(--t1) var(--e), opacity var(--t1) var(--e);
+  transition: color var(--t1) var(--e), background var(--t1) var(--e),
+    border-color var(--t1) var(--e), transform var(--t1) var(--e);
 }
-.tag-filter .tag-category-dot { filter: grayscale(1); opacity: .5; }
+.tag-filter .tag-category-dot { filter: grayscale(1); opacity: 0.5; transition: opacity var(--t1) var(--e); }
 .tag-filter:hover { color: var(--fg-2); border-color: var(--line-2); }
-.tag-filter[aria-pressed="true"] { color: var(--fg-2); background: var(--c3); border-color: var(--line-2); }
+.tag-filter:active { transform: scale(0.96); }
+.tag-filter[aria-pressed="true"] {
+  color: var(--fg-2);
+  background: var(--c3);
+  border-color: var(--line-2);
+}
 .tag-filter[aria-pressed="true"] .tag-category-dot { filter: none; opacity: 1; }
-.tags-filter-sync { margin-left: auto; color: var(--fg-4); font: 400 9px/1.4 var(--mono); }
+.tags-filter-sync {
+  margin-left: auto;
+  color: var(--fg-4);
+  font: 400 var(--fz-xs)/1.4 var(--mono);
+}
 
-.tags-results { margin-top: 32px; min-height: 260px; }
-.tags-results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; color: var(--fg-4); font-size: var(--fz-sm); }
+/* ── Results ─────────────────────────────────────────────────── */
+.tags-results { margin-top: var(--s8); min-height: 260px; }
+.tags-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: 9px;
+  color: var(--fg-4);
+  font-size: var(--fz-sm);
+}
 .tags-results-head span { font: 400 var(--fz-xs)/1.4 var(--mono); }
 .tags-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+
+/* Whole card is the add target. It used to lift on hover while only the
+   three trailing buttons responded, which promised more than it did. */
 .tag-card {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-height: 60px;
-  color: var(--fg-2); background: color-mix(in srgb, var(--c2) 78%, transparent);
-  border: 1px solid var(--line); border-radius: var(--r2);
-  transition: background var(--t1) var(--e), border-color var(--t1) var(--e), transform var(--t1) var(--e);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 60px;
+  width: 100%;
+  color: var(--fg-2);
+  text-align: left;
+  background: color-mix(in srgb, var(--c2) 78%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+  transition: background var(--t1) var(--e), border-color var(--t1) var(--e),
+    transform var(--t1) var(--e);
 }
 .tag-card:hover { background: var(--c2); border-color: var(--line-2); transform: translateY(-1px); }
+.tag-card:has(.tag-add[aria-pressed="true"]) {
+  border-color: var(--a-line);
+  background: var(--a-dim);
+}
 .tag-card-info {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px;
-  min-width: 0; padding: 9px 6px 9px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s4);
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 9px 6px 9px var(--s3);
+  color: inherit;
+  text-align: left;
+  border-radius: var(--r2);
+}
+.tag-card-info:active { transform: scale(0.995); }
+/* Membership is carried by the check glyph as well as the tint, so the state
+   does not rest on colour alone. */
+.tag-add[aria-pressed="true"] .tag-card-names strong::after {
+  content: "";
+  display: inline-block;
+  width: 9px; height: 9px;
+  margin-left: 6px;
+  background: var(--a);
+  clip-path: polygon(19% 52%, 36% 68%, 82% 22%, 92% 33%, 37% 87%, 8% 60%);
+  vertical-align: baseline;
 }
 .tag-card-names { display: grid; gap: 3px; overflow: hidden; }
-.tag-card-names strong, .tag-card-names span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tag-card-names strong,
+.tag-card-names span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tag-card-names strong { font: 500 var(--fz-md)/1.35 var(--mono); color: var(--fg); }
 .tag-card-names span { color: var(--fg-3); font-size: var(--fz-sm); }
-.tag-card-meta { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-4); font: 400 var(--fz-xs)/1.3 var(--mono); white-space: nowrap; }
-.tag-card-actions { display: flex; align-items: center; gap: 2px; padding: 5px 6px 5px 0; }
-.tag-icon-action {
-  display: inline-grid; place-items: center; flex: none;
-  width: 32px; height: 32px; padding: 0;
-  color: var(--fg-4); background: transparent; border: 0; border-radius: var(--r2); text-decoration: none;
-  transition: color var(--t1) var(--e), background var(--t1) var(--e), transform var(--t1) var(--e);
+.tag-card-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-4);
+  font: 400 var(--fz-xs)/1.3 var(--mono);
+  white-space: nowrap;
 }
-.tag-icon-action .ico { width: 14px; height: 14px; }
-.tag-icon-action:hover { color: var(--fg); background: var(--c4); }
-.tag-icon-action:active { transform: scale(.94); }
-.tag-add[aria-pressed="true"] { color: var(--a); background: var(--a-dim); }
-.tags-empty { padding: 48px 16px; color: var(--fg-4); text-align: center; background: var(--c1); border: 1px dashed var(--line); border-radius: var(--r3); }
-.tag-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }
-.tag-pagination[hidden] { display: none; }
-.tag-pagination button {
-  min-height: 32px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px;
-  color: var(--fg-3); background: var(--c2); border: 1px solid var(--line); border-radius: var(--r2); font-size: var(--fz-sm);
-}
-.tag-pagination button:hover:not(:disabled) { color: var(--fg); border-color: var(--line-2); }
-.tag-pagination button:disabled { opacity: .38; cursor: not-allowed; }
-.tag-pagination button .ico { width: 12px; height: 12px; }
-.tag-pagination > span { min-width: 48px; color: var(--fg-4); font: 400 var(--fz-xs)/1.4 var(--mono); text-align: center; }
-.tags-foot { margin-top: 34px; padding-top: 13px; border-top: 1px solid var(--line); color: var(--fg-4); font-size: var(--fz-xs); }
+.tag-card-actions { display: flex; align-items: center; gap: 2px; padding: var(--s1) 6px var(--s1) 0; }
+/* Trailing cluster: centred tooltips would spill past the row's right edge,
+   the same reason the topbar and stage tools right-align theirs. */
+.tag-card-actions [data-tip]::after { left: auto; right: 0; transform: translate(0, -3px); }
+.tag-card-actions [data-tip]:hover::after { transform: translate(0, 0); }
+/* Reveal on hover keeps the row calm; the touch fallback below keeps it
+   reachable where hover does not exist. */
+.tag-card-actions .ibtn { opacity: 0; transition: opacity var(--t1) var(--e), color var(--t1) var(--e), background var(--t1) var(--e); }
+.tag-card:hover .tag-card-actions .ibtn,
+.tag-card:focus-within .tag-card-actions .ibtn,
+.tag-card-actions .ibtn:focus-visible { opacity: 1; }
 
-/* Prompt cart */
+.tags-empty {
+  padding: 48px var(--s4);
+  color: var(--fg-4);
+  text-align: center;
+  background: var(--c1);
+  border: 1px dashed var(--line);
+  border-radius: var(--r3);
+}
+
+.tag-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  margin-top: var(--s4);
+}
+.tag-pagination[hidden] { display: none; }
+.tag-pagination > span {
+  min-width: 48px;
+  color: var(--fg-4);
+  font: 400 var(--fz-xs)/1.4 var(--mono);
+  text-align: center;
+}
+
+.tags-foot {
+  margin-top: var(--s8);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  color: var(--fg-4);
+  font-size: var(--fz-xs);
+}
+
+/* ── Prompt cart ─────────────────────────────────────────────── */
 .tag-cart {
-  position: sticky; top: 58px;
-  height: min(720px, calc(100dvh - 74px)); min-height: 360px;
-  display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto;
+  position: sticky;
+  top: 58px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  height: min(720px, calc(100dvh - 74px));
+  min-height: 360px;
   background: color-mix(in srgb, var(--c1) 96%, transparent);
-  border: 1px solid var(--line); border-radius: var(--r3); overflow: hidden;
-  box-shadow: 0 18px 52px -36px rgba(0,0,0,.9);
+  border: 1px solid var(--line);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-2), var(--sh-lip);
+  overflow: hidden;
 }
 .tag-cart-head {
   grid-row: 1;
-  min-height: 46px; padding: 0 11px 0 13px;
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: 46px;
+  padding: 0 var(--s2) 0 var(--s3);
   border-bottom: 1px solid var(--line);
 }
-.tag-cart-head > div { display: flex; align-items: center; gap: 7px; }
+.tag-cart-head > div { display: flex; align-items: center; gap: var(--s2); }
 .tag-cart-head strong { font-size: var(--fz-md); font-weight: 600; }
-.tag-cart-head span { min-width: 19px; padding: 1px 5px; color: var(--a); background: var(--a-dim); border-radius: 99px; font: 500 9px/1.5 var(--mono); text-align: center; }
 .tag-cart-close { display: none; }
-.tag-cart-list { grid-row: 2; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.tag-cart-item { padding: 10px 11px; display: grid; gap: 9px; border-bottom: 1px solid var(--line); }
-.tag-cart-item-names { display: grid; gap: 2px; overflow: hidden; }
-.tag-cart-item-names strong, .tag-cart-item-names span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.tag-cart-item-names strong { color: var(--fg-2); font: 500 10.5px/1.35 var(--mono); }
-.tag-cart-item-names span { color: var(--fg-4); font-size: 10px; }
-.tag-weight { display: flex; align-items: center; gap: 4px; }
-.tag-weight > span { margin-right: auto; color: var(--fg-4); font-size: 9px; }
-.tag-weight-step, .tag-cart-remove {
-  display: inline-grid; place-items: center; width: 27px; height: 27px;
-  color: var(--fg-4); background: var(--c2); border: 1px solid var(--line); border-radius: var(--r1);
+
+.tag-cart-list {
+  grid-row: 2;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
-.tag-weight-step:hover, .tag-cart-remove:hover { color: var(--fg); border-color: var(--line-2); }
-.tag-weight-step .ico, .tag-cart-remove .ico { width: 12px; height: 12px; }
-.tag-cart-remove { margin-left: 3px; background: transparent; border-color: transparent; }
-.tag-cart-remove:hover { color: var(--err); background: rgba(232,135,135,.08); border-color: transparent; }
+.tag-cart-item {
+  display: grid;
+  gap: 9px;
+  padding: 10px var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+.tag-cart-item-names { display: grid; gap: 2px; overflow: hidden; }
+.tag-cart-item-names strong,
+.tag-cart-item-names span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tag-cart-item-names strong { color: var(--fg-2); font: 500 var(--fz-sm)/1.35 var(--mono); }
+.tag-cart-item-names span { color: var(--fg-4); font-size: var(--fz-xs); }
+
+.tag-weight { display: flex; align-items: center; gap: var(--s1); }
+.tag-weight > span { margin-right: auto; color: var(--fg-4); font-size: var(--fz-xs); }
 .tag-weight input[type="number"] {
-  width: 46px; height: 27px; padding: 3px 4px; text-align: center;
-  color: var(--fg-2); background: var(--c0); border-radius: var(--r1); font-size: 10px;
+  width: 46px;
+  height: 27px;
+  padding: 3px var(--s1);
+  text-align: center;
+  color: var(--fg-2);
+  background: var(--c0);
+  border-radius: var(--r1);
+  font-size: var(--fz-xs);
 }
 .tag-weight input[type="number"]::-webkit-inner-spin-button { display: none; }
-.tag-cart-empty { grid-row: 2; align-self: center; padding: 20px; color: var(--fg-4); text-align: center; font-size: var(--fz-sm); }
+.tag-cart-remove:hover { color: var(--err); background: var(--err-dim); }
+
+.tag-cart-empty {
+  grid-row: 2;
+  align-self: center;
+  padding: var(--s5);
+  color: var(--fg-4);
+  text-align: center;
+  font-size: var(--fz-sm);
+}
 .tag-cart-empty[hidden] { display: none; }
-.tag-cart-preview { grid-row: 3; padding: 9px 11px; border-top: 1px solid var(--line); background: var(--c0); }
+
+.tag-cart-preview {
+  grid-row: 3;
+  padding: 9px var(--s3);
+  border-top: 1px solid var(--line);
+  background: var(--c0);
+}
 .tag-cart-preview[hidden] { display: none; }
-.tag-cart-preview > span { display: block; margin-bottom: 4px; color: var(--fg-4); font-size: 9px; }
+.tag-cart-preview > span {
+  display: block;
+  margin-bottom: var(--s1);
+  color: var(--fg-4);
+  font-size: var(--fz-xs);
+}
 .tag-cart-preview code {
-  display: -webkit-box; max-height: 56px; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-  color: var(--fg-3); font: 400 9.5px/1.45 var(--mono); overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  max-height: 56px;
+  overflow: hidden;
+  color: var(--fg-3);
+  font: 400 var(--fz-xs)/1.45 var(--mono);
+  overflow-wrap: anywhere;
 }
-.tag-cart-foot { grid-row: 4; padding: 9px; display: grid; grid-template-columns: auto 1fr; gap: 7px; border-top: 1px solid var(--line); }
-.tag-cart-clear, .tag-cart-copy {
-  min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border-radius: var(--r2); font-size: var(--fz-sm);
+.tag-cart-foot {
+  grid-row: 4;
+  display: grid;
+  gap: var(--s2);
+  padding: 9px;
+  border-top: 1px solid var(--line);
 }
-.tag-cart-clear { color: var(--fg-3); background: var(--c2); border: 1px solid var(--line); }
-.tag-cart-copy { color: var(--a-ink); background: var(--a); font-weight: 600; }
-.tag-cart-clear .ico, .tag-cart-copy .ico { width: 13px; height: 13px; }
-.tag-cart-clear:hover:not(:disabled) { color: var(--fg); border-color: var(--line-2); }
-.tag-cart-copy:hover:not(:disabled) { background: #c1b2ff; }
-.tag-cart-clear:disabled, .tag-cart-copy:disabled { color: var(--fg-4); background: var(--c2); opacity: .55; cursor: not-allowed; }
-.tag-cart-fab, .tag-cart-backdrop { display: none; }
+.tag-cart-foot-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.tag-cart-apply .ico { width: 13px; height: 13px; }
 
-.tags-toast {
-  position: fixed; left: 50%; bottom: 22px; z-index: 130; transform: translateX(-50%);
-  max-width: calc(100vw - 32px); padding: 8px 12px; color: var(--fg-2); background: var(--c3);
-  border: 1px solid var(--line-2); border-radius: var(--r2); box-shadow: 0 12px 32px -8px rgba(0,0,0,.7);
-  white-space: nowrap;
-}
-.tags-toast[hidden] { display: none; }
+.tag-cart-fab,
+.tag-cart-backdrop { display: none; }
 
-@media (max-width: 900px) {
-  .tags-main { width: calc(100% - 24px); display: block; padding-top: 30px; }
+/* ── Tablet ──────────────────────────────────────────────────── */
+@media (max-width: 1080px) {
+  :root { --cart: 268px; }
+}
+
+/* ── Mobile: cart becomes a bottom sheet ─────────────────────── */
+@media (max-width: 860px) {
+  .tags-main {
+    width: calc(100% - var(--s6));
+    display: block;
+    padding-top: var(--s8);
+  }
   .tags-hero h1 { font-size: 26px; }
-  .tags-search { margin-top: 20px; }
-  .tags-search button { min-width: 58px; padding: 0 11px; }
+  .tags-search { margin-top: var(--s5); }
+  .tags-search .btn { min-width: 58px; }
   .tags-filter-sync { width: 100%; margin: 1px 0 0; }
-  .tags-results { margin-top: 28px; }
-  .tag-card-info { gap: 8px; padding-left: 10px; }
-  .tag-card-meta { font-size: 9px; }
-  .tag-icon-action { width: 40px; height: 40px; }
+  .tags-results { margin-top: var(--s6); }
+  .tag-card-info { gap: var(--s2); padding-left: 10px; }
   .tag-card-actions { gap: 0; padding-right: 2px; }
   .tags-foot { line-height: 1.6; }
 
   .tag-cart {
-    position: fixed; z-index: 120; inset: auto 8px 8px;
-    height: min(72dvh, 620px); min-height: 320px;
-    visibility: hidden; opacity: 0; transform: translateY(calc(100% + 20px));
-    transition: transform var(--t3) var(--e-out), opacity var(--t2) var(--e), visibility 0s var(--t3);
+    position: fixed;
+    z-index: var(--z-modal);
+    inset: auto var(--s2) var(--s2);
+    height: min(72dvh, 620px);
+    min-height: 320px;
+    padding-bottom: env(safe-area-inset-bottom);
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(calc(100% + var(--s5)));
+    transition: transform var(--t3) var(--e-out), opacity var(--t2) var(--e),
+      visibility 0s var(--t3);
   }
   body[data-tag-cart="open"] { overflow: hidden; }
-  body[data-tag-cart="open"] .tag-cart { visibility: visible; opacity: 1; transform: none; transition-delay: 0s; }
+  body[data-tag-cart="open"] .tag-cart {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    transition-delay: 0s;
+  }
   .tag-cart-close { display: inline-grid; }
+
   .tag-cart-backdrop {
-    display: block; position: fixed; inset: 0; z-index: 110;
-    width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0;
-    background: rgba(5,5,7,.68); backdrop-filter: blur(3px);
-    opacity: 0; visibility: hidden; pointer-events: none;
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-scrim);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(8, 8, 10, 0.72);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
     transition: opacity var(--t2) var(--e), visibility 0s var(--t2);
   }
-  body[data-tag-cart="open"] .tag-cart-backdrop { opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s; }
-  .tag-cart-fab {
-    position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 100;
-    min-width: 46px; height: 46px; padding: 0 11px;
-    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-    color: var(--a-ink); background: var(--a); border-radius: 99px;
-    box-shadow: 0 12px 30px -8px rgba(0,0,0,.8);
+  body[data-tag-cart="open"] .tag-cart-backdrop {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
   }
+
+  .tag-cart-fab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s2);
+    position: fixed;
+    right: var(--s4);
+    bottom: calc(var(--s4) + env(safe-area-inset-bottom));
+    z-index: var(--z-sticky);
+    min-width: 46px;
+    height: 46px;
+    padding: 0 var(--s3);
+    color: var(--a-ink);
+    background: var(--a);
+    border-radius: 20px;
+    box-shadow: var(--sh-2);
+    transition: background var(--t1) var(--e), transform var(--t1) var(--e);
+  }
+  .tag-cart-fab:active { transform: scale(0.96); }
   .tag-cart-fab .ico { width: 16px; height: 16px; }
-  .tag-cart-fab span { font: 600 10px/1 var(--mono); }
-  .tags-toast { bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .tag-cart-fab span { font: 600 var(--fz-xs)/1 var(--mono); }
+  /* Clear the floating cart button so toasts stay legible. */
+  .toasts { bottom: calc(72px + env(safe-area-inset-bottom)); }
 }
 
-@media (max-width: 560px) {
+/* ── Small phones ────────────────────────────────────────────── */
+@media (max-width: 480px) {
   .tag-card { min-height: 66px; }
   .tag-card-info { grid-template-columns: minmax(0, 1fr); gap: 3px; }
   .tag-card-meta { justify-self: start; }
-  .tag-card-actions { align-self: stretch; }
-  .tag-icon-action { width: 38px; height: 100%; min-height: 42px; }
+  .tag-card-actions { align-self: stretch; align-items: center; }
+  .tag-cart-foot-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Touch ───────────────────────────────────────────────────── */
+/* Row actions are hover-revealed on pointer devices; without this they
+   would be invisible and unreachable on touch. */
+@media (hover: none) {
+  .tag-card-actions .ibtn { opacity: 1; }
+  .tag-card:hover { transform: none; background: color-mix(in srgb, var(--c2) 78%, transparent); border-color: var(--line); }
 }

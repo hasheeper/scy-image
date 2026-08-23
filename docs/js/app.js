@@ -5,6 +5,8 @@ import { attach as attachHighlight } from "./highlight.js";
 import { attachTagAutocomplete } from "./tag-autocomplete.js";
 import { convertToNaiPrompt } from "./prompt-converter.js";
 import { quotaPolicy, recordSuccessfulImage } from "./quota-policy.js";
+import { toast } from "./toast.js";
+import { takePendingTags } from "./tag-handoff.js";
 
 const $ = (id) => document.getElementById(id);
 const body = document.body;
@@ -59,18 +61,6 @@ let quotaLoading = false;
 let batchRestricted = false;
 let requestedBatchCount = DEFAULTS.batchCount;
 const urls = new Map();
-
-/* ── toast ─────────────────────────────────────────────────── */
-function toast(message, kind = "err") {
-  const el = document.createElement("div");
-  el.className = `toast ${kind}`;
-  el.append(document.createTextNode(message));
-  $("toasts").append(el);
-  setTimeout(() => {
-    el.classList.add("out");
-    setTimeout(() => el.remove(), 160);
-  }, kind === "err" ? 7000 : 3000);
-}
 
 const setState = (next) => { body.dataset.state = next; };
 
@@ -985,8 +975,18 @@ $("sampler").addEventListener("change", () => { syncAdvBadge(); persist(); });
 $("prompt").addEventListener("input", () => { syncPromptCount(); persistSoon(); });
 $("negative").addEventListener("input", persistSoon);
 document.querySelectorAll("[data-convert-prompt]").forEach((button) => {
+  const textarea = $(button.dataset.convertPrompt);
+  const settle = (label) => {
+    button.dataset.state = "done";
+    const restore = () => {
+      delete button.dataset.state;
+      textarea.removeEventListener("input", restore);
+    };
+    textarea.addEventListener("input", restore, { once: true });
+    toast(label, "ok");
+  };
+
   button.addEventListener("click", () => {
-    const textarea = $(button.dataset.convertPrompt);
     const before = textarea.value;
     if (!before.trim()) {
       toast("没有可清洗内容");
@@ -994,7 +994,7 @@ document.querySelectorAll("[data-convert-prompt]").forEach((button) => {
     }
     const converted = convertToNaiPrompt(before);
     if (converted === before) {
-      toast("格式无需清洗", "ok");
+      settle("格式已经是 NAI 写法");
       return;
     }
     textarea.setRangeText(converted, 0, before.length, "end");
@@ -1003,7 +1003,7 @@ document.querySelectorAll("[data-convert-prompt]").forEach((button) => {
       inputType: "insertReplacementText",
       data: converted
     }));
-    toast("格式已清洗", "ok");
+    settle("格式已清洗");
   });
 });
 
@@ -1318,6 +1318,29 @@ async function enterApp() {
   measureFit();
   $("prompt").focus();
   void refreshQuota({ force: true });
+  applyPendingTags();
+}
+
+/* Tags queued from the dictionary tab. Appending is confirmed rather than
+   automatic: the prompt box is where the user's own wording lives, and a
+   silent rewrite on focus would feel like the page acting behind their back. */
+function applyPendingTags() {
+  const pending = takePendingTags();
+  if (!pending) return;
+  const field = $("prompt");
+  const count = pending.split(",").filter((part) => part.trim()).length;
+  if (!confirm(`Tag 词典有 ${count} 个 Tag 待插入，追加到描述末尾？`)) return;
+
+  const current = field.value.trimEnd().replace(/,+$/, "");
+  field.value = current ? `${current}, ${pending}` : pending;
+  field.dispatchEvent(new InputEvent("input", {
+    bubbles: true,
+    inputType: "insertText",
+    data: pending
+  }));
+  field.focus();
+  field.setSelectionRange(field.value.length, field.value.length);
+  toast(`已插入 ${count} 个 Tag`, "ok");
 }
 
 async function boot() {

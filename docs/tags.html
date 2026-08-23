@@ -25,6 +25,7 @@
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7.5h14M9.5 7.5V5.5h5v2M7 7.5l.8 11a1.5 1.5 0 0 0 1.5 1.4h5.4a1.5 1.5 0 0 0 1.5-1.4l.8-11" /></symbol>
         <symbol id="i-cart" viewBox="0 0 24 24"><path d="M4 5h2l1.5 9h9.8l1.7-6H7" /><circle cx="10" cy="18" r="1" /><circle cx="17" cy="18" r="1" /></symbol>
         <symbol id="i-next" viewBox="0 0 24 24"><path d="m9.5 5 7 7-7 7" /></symbol>
+        <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12h13" /><path d="m12 7 5 5-5 5" /><path d="M19.5 4.5v15" /></symbol>
       </defs>
     </svg>
 
@@ -32,7 +33,7 @@
       <a class="brand tags-brand" href="./index.html">
         <svg class="ico"><use href="#i-logo" /></svg><span>Scylla</span>
       </a>
-      <a class="tags-back" href="./index.html"><svg class="ico"><use href="#i-back" /></svg>返回生成器</a>
+      <a class="btn btn-quiet btn-sm tags-back" href="./index.html"><svg class="ico"><use href="#i-back" /></svg>返回生成器</a>
     </header>
 
     <main class="tags-main">
@@ -44,7 +45,7 @@
           <form class="tags-search" id="tagSearchForm" role="search">
             <svg class="ico"><use href="#i-search" /></svg>
             <input id="tagSearch" type="search" autocomplete="off" spellcheck="false" placeholder="例如：蓝发 / blue hair" aria-label="搜索 Danbooru Tag">
-            <button id="tagSearchButton" type="submit">搜索</button>
+            <button class="btn btn-primary" id="tagSearchButton" type="submit">搜索</button>
           </form>
           <div class="tags-filters" id="tagFilters" aria-label="Tag 类型筛选">
             <span class="tags-filter-label">类型</span>
@@ -64,9 +65,9 @@
           </div>
           <div class="tags-grid" id="tagResults"></div>
           <nav class="tag-pagination" id="tagPagination" aria-label="搜索结果分页" hidden>
-            <button id="tagPrevPage" type="button"><svg class="ico"><use href="#i-back" /></svg>上一页</button>
+            <button class="btn btn-quiet btn-sm" id="tagPrevPage" type="button"><svg class="ico"><use href="#i-back" /></svg>上一页</button>
             <span id="tagPageLabel">第 1 页</span>
-            <button id="tagNextPage" type="button">下一页<svg class="ico"><use href="#i-next" /></svg></button>
+            <button class="btn btn-quiet btn-sm" id="tagNextPage" type="button">下一页<svg class="ico"><use href="#i-next" /></svg></button>
           </nav>
         </section>
 
@@ -77,8 +78,8 @@
 
       <aside class="tag-cart" id="tagCart" aria-label="Prompt Tag 组合">
         <header class="tag-cart-head">
-          <div><strong>Prompt 组合</strong><span id="tagCartCount">0</span></div>
-          <button class="tag-icon-action tag-cart-close" id="tagCartClose" type="button" aria-label="关闭组合侧栏">
+          <div><strong>Prompt 组合</strong><span class="badge" id="tagCartCount">0</span></div>
+          <button class="ibtn ibtn-xs tag-cart-close" id="tagCartClose" type="button" aria-label="关闭组合侧栏">
             <svg class="ico"><use href="#i-close" /></svg>
           </button>
         </header>
@@ -89,12 +90,17 @@
           <code id="tagCartPrompt"></code>
         </div>
         <footer class="tag-cart-foot">
-          <button class="tag-cart-clear" id="tagCartClear" type="button" disabled>
-            <svg class="ico"><use href="#i-trash" /></svg>清空
+          <button class="btn btn-primary btn-sm tag-cart-apply" id="tagCartApply" type="button" disabled>
+            <svg class="ico"><use href="#i-send" /></svg>应用到生成器
           </button>
-          <button class="tag-cart-copy" id="tagCartCopy" type="button" disabled>
-            <svg class="ico"><use href="#i-copy" /></svg>复制组合
-          </button>
+          <div class="tag-cart-foot-row">
+            <button class="btn btn-quiet btn-sm" id="tagCartClear" type="button" disabled>
+              <svg class="ico"><use href="#i-trash" /></svg>清空
+            </button>
+            <button class="btn btn-quiet btn-sm" id="tagCartCopy" type="button" disabled>
+              <svg class="ico"><use href="#i-copy" /></svg>复制
+            </button>
+          </div>
         </footer>
       </aside>
     </main>
@@ -103,7 +109,7 @@
       <svg class="ico"><use href="#i-cart" /></svg><span id="tagCartFabCount">0</span>
     </button>
     <button class="tag-cart-backdrop" id="tagCartBackdrop" type="button" aria-label="关闭组合侧栏"></button>
-    <div class="tags-toast" id="tagToast" role="status" aria-live="polite" hidden></div>
+    <div class="toasts" role="status" aria-live="polite"></div>
     <script type="module" src="./js/tags-page.js"></script>
   </body>
 </html>

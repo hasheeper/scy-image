@@ -169,7 +169,7 @@ export function attachTagAutocomplete(textarea, { maxResults = 20 } = {}) {
     const note = document.createElement("p");
     note.className = `tag-suggest-note ${kind}`.trim();
     note.setAttribute("role", "status");
-    note.textContent = message;
+    note.append(document.createTextNode(message));
     popover.append(note);
     setOpen(true);
     position();
@@ -230,12 +230,19 @@ export function attachTagAutocomplete(textarea, { maxResults = 20 } = {}) {
     request?.abort();
     request = new AbortController();
     const token = ++searchToken;
+    /* Announce the request instead of leaving a blank gap. Results already on
+       screen stay put — swapping them for a spinner on every keystroke reads
+       as flicker — so only the first lookup shows the pending row. */
+    popover.setAttribute("aria-busy", "true");
+    if (popover.hidden) renderMessage("正在查词典…", "load");
     try {
       const items = await searchTags(query, { limit: maxResults, broad: true, signal: request.signal });
       if (token !== searchToken || fragmentAtCaret(textarea).query !== query) return;
       render(items);
     } catch (error) {
       if (error.name !== "AbortError") renderMessage(error.message || "Tag 搜索失败", "err");
+    } finally {
+      if (token === searchToken) popover.removeAttribute("aria-busy");
     }
   };
 

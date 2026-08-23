@@ -2,6 +2,8 @@ import {
   CATEGORIES, danbooruTagUrl, formatCount, loadCategoryFilter,
   promptTag, saveCategoryFilter, searchTagPage
 } from "./tag-api.js";
+import { toast } from "./toast.js";
+import { queueTags } from "./tag-handoff.js";
 
 const CART_KEY = "scylla:tag-cart-v1";
 const input = document.getElementById("tagSearch");
@@ -11,7 +13,6 @@ const results = document.getElementById("tagResults");
 const status = document.getElementById("tagStatus");
 const count = document.getElementById("tagResultCount");
 const region = document.querySelector(".tags-results");
-const toast = document.getElementById("tagToast");
 const filterButtons = [...document.querySelectorAll(".tag-filter")];
 const cartPanel = document.getElementById("tagCart");
 const cartList = document.getElementById("tagCartList");
@@ -22,10 +23,11 @@ const cartPrompt = document.getElementById("tagCartPrompt");
 const cartPreview = document.getElementById("tagCartPreview");
 const cartCopy = document.getElementById("tagCartCopy");
 const cartClear = document.getElementById("tagCartClear");
+const cartApply = document.getElementById("tagCartApply");
 const cartOpen = document.getElementById("tagCartOpen");
 const cartClose = document.getElementById("tagCartClose");
 const cartBackdrop = document.getElementById("tagCartBackdrop");
-const mobileCart = matchMedia("(max-width: 900px)");
+const mobileCart = matchMedia("(max-width: 860px)");
 const pagination = document.getElementById("tagPagination");
 const prevPage = document.getElementById("tagPrevPage");
 const nextPage = document.getElementById("tagNextPage");
@@ -34,7 +36,6 @@ const pageLabel = document.getElementById("tagPageLabel");
 let timer = null;
 let request = null;
 let runId = 0;
-let toastTimer = null;
 let composing = false;
 let activeCategories = loadCategoryFilter();
 let cart = loadCart();
@@ -51,27 +52,26 @@ function makeIcon(symbol) {
   return icon;
 }
 
-function showToast(message) {
-  clearTimeout(toastTimer);
-  toast.textContent = message;
-  toast.hidden = false;
-  toastTimer = setTimeout(() => { toast.hidden = true; }, 2200);
-}
-
 async function copyText(value, message) {
   try {
     await navigator.clipboard.writeText(value);
   } catch {
+    /* Clipboard API needs a secure context and permission; the textarea
+       route still works when it is unavailable. */
     const helper = document.createElement("textarea");
     helper.value = value;
     helper.style.position = "fixed";
     helper.style.opacity = "0";
     document.body.append(helper);
     helper.select();
-    document.execCommand("copy");
+    const copied = document.execCommand("copy");
     helper.remove();
+    if (!copied) {
+      toast("复制失败，请手动选取组合预览里的文本");
+      return;
+    }
   }
-  showToast(message);
+  toast(message, "ok");
 }
 
 function loadCart() {
@@ -137,8 +137,6 @@ function syncAddButtons() {
     const on = selected.has(button.dataset.tag);
     button.setAttribute("aria-pressed", String(on));
     button.setAttribute("aria-label", `${on ? "移出" : "加入"} Prompt 组合：${promptTag(button.dataset.tag)}`);
-    button.title = on ? "移出组合" : "加入组合";
-    button.querySelector("use").setAttribute("href", on ? "#i-check" : "#i-plus");
   });
 }
 
@@ -176,7 +174,7 @@ function renderCart() {
     label.textContent = "权重";
     const minus = document.createElement("button");
     minus.type = "button";
-    minus.className = "tag-weight-step";
+    minus.className = "ibtn ibtn-xs tag-weight-step";
     minus.setAttribute("aria-label", `降低 ${item.name} 的权重`);
     minus.append(makeIcon("i-minus"));
     minus.addEventListener("click", () => adjustWeight(index, -0.1));
@@ -194,15 +192,15 @@ function renderCart() {
     });
     const plus = document.createElement("button");
     plus.type = "button";
-    plus.className = "tag-weight-step";
+    plus.className = "ibtn ibtn-xs tag-weight-step";
     plus.setAttribute("aria-label", `提高 ${item.name} 的权重`);
     plus.append(makeIcon("i-plus"));
     plus.addEventListener("click", () => adjustWeight(index, 0.1));
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.className = "tag-cart-remove";
+    remove.className = "ibtn ibtn-xs tag-cart-remove";
     remove.setAttribute("aria-label", `移除 ${item.name}`);
-    remove.title = "移除";
+    remove.dataset.tip = "移除";
     remove.append(makeIcon("i-close"));
     remove.addEventListener("click", () => removeCartItem(index));
     controls.append(label, minus, weight, plus, remove);
@@ -219,6 +217,7 @@ function renderCart() {
   cartFabCount.textContent = String(cart.length);
   cartCopy.disabled = empty;
   cartClear.disabled = empty;
+  cartApply.disabled = empty;
   syncAddButtons();
 }
 
@@ -226,10 +225,10 @@ function toggleCart(item) {
   const index = cart.findIndex((entry) => entry.name === item.name);
   if (index >= 0) {
     cart.splice(index, 1);
-    showToast(`已移出：${promptTag(item.name)}`);
+    toast(`已移出：${promptTag(item.name)}`, "ok");
   } else {
     cart.push({ name: item.name, cnName: item.cnName, category: item.category, weight: 1 });
-    showToast(`已加入：${promptTag(item.name)}`);
+    toast(`已加入：${promptTag(item.name)}`, "ok");
   }
   saveCart();
   renderCart();
@@ -243,12 +242,15 @@ function emptyResults(message) {
   results.append(note);
 }
 
-function actionButton(label, title, symbol) {
+/* data-tip renders the styled tooltip the rest of the app uses and is
+   suppressed on touch; native title= showed an OS box that looked foreign
+   here and never appeared on phones at all. */
+function actionButton(label, tip, symbol) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "tag-icon-action";
+  button.className = "ibtn ibtn-xs";
   button.setAttribute("aria-label", label);
-  button.title = title;
+  button.dataset.tip = tip;
   button.append(makeIcon(symbol));
   return button;
 }
@@ -266,8 +268,16 @@ function renderResults(items) {
     const card = document.createElement("article");
     card.className = "tag-card";
 
-    const info = document.createElement("div");
-    info.className = "tag-card-info";
+    /* The name block is the toggle, not just a trailing icon: the card
+       already lifted on hover, so a tiny hit area was a false affordance.
+       It stays a sibling of the icon actions rather than wrapping them —
+       nesting buttons inside a button is invalid and breaks keyboard order. */
+    const info = document.createElement("button");
+    info.type = "button";
+    info.className = "tag-card-info tag-add";
+    info.dataset.tag = item.name;
+    info.setAttribute("aria-pressed", "false");
+    info.addEventListener("click", () => toggleCart(item));
     const names = document.createElement("span");
     names.className = "tag-card-names";
     const english = document.createElement("strong");
@@ -286,22 +296,17 @@ function renderResults(items) {
 
     const actions = document.createElement("div");
     actions.className = "tag-card-actions";
-    const add = actionButton(`加入 Prompt 组合：${promptTag(item.name)}`, "加入组合", "i-plus");
-    add.classList.add("tag-add");
-    add.dataset.tag = item.name;
-    add.setAttribute("aria-pressed", "false");
-    add.addEventListener("click", () => toggleCart(item));
-    const copy = actionButton(`复制 ${promptTag(item.name)}`, "复制 Tag", "i-copy");
+    const copy = actionButton(`复制 ${promptTag(item.name)}`, "复制", "i-copy");
     copy.addEventListener("click", () => copyText(promptTag(item.name), `已复制：${promptTag(item.name)}`));
     const danbooru = document.createElement("a");
-    danbooru.className = "tag-icon-action";
+    danbooru.className = "ibtn ibtn-xs";
     danbooru.href = danbooruTagUrl(item.name);
     danbooru.target = "_blank";
     danbooru.rel = "noopener noreferrer";
-    danbooru.title = "在 Danbooru 打开";
+    danbooru.dataset.tip = "Danbooru";
     danbooru.setAttribute("aria-label", `在 Danbooru 打开 ${item.name}（新标签页）`);
     danbooru.append(makeIcon("i-external"));
-    actions.append(add, copy, danbooru);
+    actions.append(copy, danbooru);
     card.append(info, actions);
     fragment.append(card);
   });
@@ -400,7 +405,7 @@ filterButtons.forEach((button) => {
       ? activeCategories.filter((id) => id !== category)
       : [...activeCategories, category];
     if (!next.length) {
-      showToast("至少保留一种类型");
+      toast("至少保留一种类型");
       return;
     }
     activeCategories = saveCategoryFilter(next);
@@ -408,20 +413,39 @@ filterButtons.forEach((button) => {
     if (input.value.trim()) runSearch({ page: 1 });
   });
 });
+/* Paging without this leaves the viewport mid-list while the rows underneath
+   are replaced, which reads as nothing having happened. */
+function turnPage(page) {
+  runSearch({ page });
+  region.scrollIntoView({ block: "start", behavior: "smooth" });
+}
 prevPage.addEventListener("click", () => {
-  if (currentPage > 1) runSearch({ page: currentPage - 1 });
+  if (currentPage > 1) turnPage(currentPage - 1);
 });
 nextPage.addEventListener("click", () => {
-  if (hasNextPage) runSearch({ page: currentPage + 1 });
+  if (hasNextPage) turnPage(currentPage + 1);
 });
 cartOpen.addEventListener("click", () => setCartOpen(true));
 cartClose.addEventListener("click", () => setCartOpen(false));
 cartBackdrop.addEventListener("click", () => setCartOpen(false));
 cartCopy.addEventListener("click", () => copyText(combinedPrompt(), `已复制 ${cart.length} 个 Tag`));
+cartApply.addEventListener("click", () => {
+  if (!cart.length) return;
+  if (!queueTags(combinedPrompt())) {
+    toast("浏览器拒绝写入本地存储，请改用复制");
+    return;
+  }
+  toast(`已交给生成器：${cart.length} 个 Tag，回到生成器标签页确认插入`, "ok");
+});
+/* The cart is saved to localStorage, so it survives reloads and represents
+   real accumulated work — losing it to a stray click is worth one question. */
 cartClear.addEventListener("click", () => {
+  if (!cart.length) return;
+  if (!confirm(`清空组合中的 ${cart.length} 个 Tag？此操作无法撤销。`)) return;
   cart = [];
   saveCart();
   renderCart();
+  toast("已清空组合", "ok");
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && document.body.dataset.tagCart === "open") setCartOpen(false);
