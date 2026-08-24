@@ -131,9 +131,9 @@
         <button class="ibtn" id="importBtn" type="button" data-tip="导入参数" aria-label="从图片导入参数">
           <svg class="ico"><use href="#i-import" /></svg>
         </button>
-        <a class="ibtn" href="./tags.html" target="_blank" rel="noopener" data-tip="Tag 词典" aria-label="打开 Tag 词典">
+        <button class="ibtn" type="button" data-open-picker data-tip="查词插入" aria-label="查词插入">
           <svg class="ico"><use href="#i-search" /></svg>
-        </a>
+        </button>
         <button class="ibtn" id="histToggle" type="button" aria-pressed="true" data-tip="历史" aria-label="历史">
           <svg class="ico"><use href="#i-layers" /></svg>
         </button>
@@ -154,7 +154,9 @@
                 <button class="prompt-convert" type="button" data-convert-prompt="prompt" aria-label="清洗描述格式">
                   <svg class="ico"><use href="#i-convert" /></svg>清洗格式
                 </button>
-                <a class="tag-dict-link" href="./tags.html" target="_blank" rel="noopener">Tag 词典</a>
+                <button class="prompt-convert" type="button" data-open-picker aria-label="查词插入">
+                  <svg class="ico"><use href="#i-search" /></svg>查词
+                </button>
               </div>
             </div>
             <textarea id="prompt" placeholder="输入中文或英文 Tag，可自动补全" autocomplete="off" spellcheck="false"></textarea>
@@ -388,6 +390,38 @@
     </div>
 
     <input id="importFile" type="file" accept="image/png,image/jpeg" hidden>
+
+    <!-- ══ Tag picker ═════════════════════════════════════════ -->
+    <!-- Writes straight into the prompt; no tab switch, no confirm step. -->
+    <div class="sheet" id="pickerSheet" hidden>
+      <div class="picker-card" role="dialog" aria-modal="true" aria-labelledby="pickerTitle">
+        <header class="picker-head">
+          <div class="picker-title">
+            <svg class="ico"><use href="#i-search" /></svg>
+            <strong id="pickerTitle">查词插入</strong>
+          </div>
+          <a class="btn-link" href="./tags.html" target="_blank" rel="noopener">完整词典</a>
+          <button class="ibtn ibtn-xs" id="pickerClose" type="button" aria-label="关闭">
+            <svg class="ico"><use href="#i-close" /></svg>
+          </button>
+        </header>
+
+        <div class="picker-search">
+          <svg class="ico"><use href="#i-search" /></svg>
+          <input id="pickerSearch" type="search" autocomplete="off" spellcheck="false"
+                 placeholder="蓝发 / blue hair" aria-label="搜索 Tag">
+        </div>
+
+        <div class="picker-chosen" id="pickerChosenWrap" hidden>
+          <span>本次插入</span>
+          <div id="pickerChosen"></div>
+        </div>
+
+        <p class="picker-status" id="pickerStatus" role="status" aria-live="polite"></p>
+        <div class="picker-results" id="pickerResults" role="listbox" aria-label="搜索结果"></div>
+        <footer class="picker-foot">点一下插入描述，再点一下移除</footer>
+      </div>
+    </div>
 
     <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
     <script type="module" src="./js/app.js"></script>

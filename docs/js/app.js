@@ -8,6 +8,7 @@ import { quotaPolicy, recordSuccessfulImage } from "./quota-policy.js";
 import { toast } from "./toast.js";
 import { takePendingTags } from "./tag-handoff.js";
 import { readImageParams } from "./image-meta.js";
+import { createTagPicker } from "./tag-picker.js";
 
 const $ = (id) => document.getElementById(id);
 const body = document.body;
@@ -63,7 +64,30 @@ let batchRestricted = false;
 let requestedBatchCount = DEFAULTS.batchCount;
 const urls = new Map();
 
-const setState = (next) => { body.dataset.state = next; };
+/* While a job runs the user may click an earlier thumbnail to look at it. That
+   is a separate axis from "is something generating": the two used to share
+   data-state, so every loop iteration's setState("busy") stomped the browsing
+   choice and the click appeared to do nothing. `browsing` records the intent
+   and outranks the job's own writes until it is released. */
+let browsing = false;
+
+const setState = (next) => {
+  if (browsing && next === "busy") return;
+  body.dataset.state = next;
+};
+
+/* Show the live job again: used by the placeholder tile and by Escape. */
+function resumeLiveView() {
+  if (!pendingShape) return;
+  browsing = false;
+  body.dataset.state = "busy";
+  $("stageTitle").textContent = pendingStageTitle();
+  $("stageSub").textContent = pendingShape.done
+    ? `已完成 ${pendingShape.done}/${pendingShape.total}`
+    : "";
+  for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = true;
+  renderGallery();
+}
 
 /* ── Fit ───────────────────────────────────────────────────── */
 /* Publish the stage's usable box as pixel values. CSS cannot express "fit
@@ -107,6 +131,13 @@ const pendingLabel = () => {
   if (composing) return "正在合成对比图";
   const which = total > 1 ? `生成中 · 第 ${index}/${total} 张` : "生成中";
   return `${which} · ${width}×${height}`;
+};
+
+const pendingStageTitle = () => {
+  if (!pendingShape) return "生成中";
+  if (pendingShape.composing) return "正在整理批次";
+  const { index, total } = pendingShape;
+  return total > 1 ? `串行生成 · 剩余 ×${total - index + 1}` : "生成中";
 };
 
 /* Skeleton mirrors the pending image's shape, letterboxed into the same box. */
@@ -503,15 +534,21 @@ function renderGallery() {
      still running — the rail looked idle and the new image arrived from
      nowhere. It leads the list because history is newest-first. */
   if (pendingShape) {
-    const slot = document.createElement("div");
+    /* Clickable: after browsing an earlier result this is the way back to the
+       running job. It is a button because it now does something. */
+    const slot = document.createElement("button");
+    slot.type = "button";
     slot.className = "tile tile-pending";
-    slot.setAttribute("role", "status");
-    slot.setAttribute("aria-label", pendingLabel());
-    slot.dataset.tip = pendingLabel();
+    slot.setAttribute("aria-live", "polite");
+    slot.setAttribute("aria-current", String(!browsing));
+    const label = browsing ? `${pendingLabel()}（点击返回）` : pendingLabel();
+    slot.setAttribute("aria-label", label);
+    slot.dataset.tip = label;
     slot.style.aspectRatio = `${pendingShape.width} / ${pendingShape.height}`;
     const glow = document.createElement("div");
     glow.className = "shimmer";
     slot.append(glow);
+    slot.addEventListener("click", resumeLiveView);
     tray.append(slot);
   }
 
@@ -567,7 +604,7 @@ function renderGallery() {
       event.dataTransfer.effectAllowed = "copy";
     });
 
-    tile.addEventListener("click", () => showEntry(item));
+    tile.addEventListener("click", () => showEntry(item, { viaUser: true }));
     tray.append(tile);
   }
 
@@ -576,7 +613,12 @@ function renderGallery() {
   }
 }
 
-function showEntry(item) {
+/* `viaUser` distinguishes a click on a thumbnail from the job presenting its
+   own fresh result. Only the former should pin the view. */
+function showEntry(item, { viaUser = false } = {}) {
+  if (viaUser && pendingShape) browsing = true;
+  else if (!viaUser) browsing = false;
+
   const url = urls.get(item.id) || URL.createObjectURL(item.blob);
   urls.set(item.id, url);
   current = { id: item.id, blob: item.blob, params: item.params, size: item.size, url };
@@ -599,7 +641,8 @@ function showEntry(item) {
     `scale ${item.params?.scale}`
   ].filter(Boolean).join(" · ");
 
-  setState("done");
+  // Bypass setState: browsing is exactly the case that must override "busy".
+  body.dataset.state = "done";
   $("saveBtn").hidden = false;
   $("reuseBtn").hidden = false;
   $("copyBtn").hidden = !item.params?.prompt;
@@ -872,7 +915,11 @@ async function runBatch(base) {
       }
       completed += 1;
       completedRecords.push(record);
-      showEntry(record);
+      pendingShape = { ...pendingShape, done: completed };
+      /* Do not yank the view away from someone who chose to look at an earlier
+         result; just let the rail show the new thumbnail. */
+      if (browsing) renderGallery();
+      else showEntry(record);
       noteSuccessfulImageQuota();
       if (batchRestricted && completed < total) {
         quotaStopped = true;
@@ -881,10 +928,13 @@ async function runBatch(base) {
     }
 
     if (quotaStopped) {
+      browsing = false;
       $("stageTitle").textContent = "额度保护已停止串行";
       $("stageSub").textContent = `已完成 ${completed}/${total}`;
       $("busyNote").textContent = "临时 Key 全局日额度低于 300，未再提交后续请求";
-      setState("done");
+      // Present what did finish, otherwise a browsed-away view stays stale.
+      if (completedRecords.length) showEntry(completedRecords.at(-1));
+      else setState("done");
       return;
     }
 
@@ -909,6 +959,7 @@ async function runBatch(base) {
       }
     }
   } catch (error) {
+    browsing = false;
     if (error.name === "AbortError") {
       setState(current ? "done" : "empty");
       toast(total > 1 ? `已取消：完成 ${completed}/${total} 张` : "已取消", "ok");
@@ -1009,6 +1060,7 @@ async function run() {
     setBusy(false);
     controller = null;
     pendingShape = null;
+    browsing = false;
     renderGallery();
     sizeSkeleton();
     validateSize();
@@ -1373,6 +1425,12 @@ $("importSheet").addEventListener("click", (e) => {
 });
 
 $("importBtn").addEventListener("click", () => { if (!gateBlocking()) $("importFile").click(); });
+
+/* Tag picker writes into the prompt directly. */
+const tagPicker = createTagPicker({
+  target: () => $("prompt"),
+  onChange: () => { refreshHighlights(); syncPromptCount(); persistSoon(); }
+});
 $("importFile").addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   // Reset first so picking the same file twice still fires a change event.
@@ -1466,8 +1524,11 @@ document.addEventListener("keydown", (e) => {
     if (!$("goBtn").disabled) run();
   }
   if (e.key === "Escape") {
-    if (body.dataset.import === "open") closeImport();
+    if (body.dataset.picker === "open") tagPicker.close();
+    else if (body.dataset.import === "open") closeImport();
     else if (body.dataset.zoom === "on") closeZoom();
+    // Return to the running job before treating Escape as "cancel".
+    else if (browsing && pendingShape) resumeLiveView();
     else if (controller) controller.abort();
   }
 });

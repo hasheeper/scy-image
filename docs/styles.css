@@ -1024,11 +1024,16 @@ body[data-hist="off"] .gallery { border-left-color: transparent; }
     linear-gradient(170deg, rgba(255, 255, 255, 0.026), transparent 62%),
     var(--c1);
   box-shadow: 0 0 0 1px var(--a-line);
-  cursor: default;
   /* aspect-ratio is set inline from the frozen request shape */
   content-visibility: visible;   /* never skip paint: it is the active element */
 }
-.tile-pending:hover { transform: none; box-shadow: 0 0 0 1px var(--a-line); }
+/* Currently on screen: matches how a selected thumbnail reads. */
+.tile-pending[aria-current="true"] { box-shadow: 0 0 0 1.5px var(--a); }
+/* Browsing elsewhere — invite the click back. */
+.tile-pending[aria-current="false"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1.5px var(--a), 0 6px 14px -4px rgba(0, 0, 0, 0.6);
+}
 .tile-x {
   position: absolute; top: 3px; right: 3px;
   width: 17px; height: 17px;
@@ -1081,8 +1086,9 @@ body[data-zoom="on"] .lightbox img { transform: none; }
 }
 .sheet[hidden] { display: none; }
 .sheet > .gate-card { width: min(468px, 100%); }
-body[data-import="open"] .sheet { opacity: 1; }
-body[data-import="open"] .sheet > .gate-card { transform: none; }
+/* Scoped by id: an unscoped .sheet rule here also revealed the tag picker. */
+body[data-import="open"] #importSheet { opacity: 1; }
+body[data-import="open"] #importSheet > .gate-card { transform: none; }
 
 .import-list { display: grid; gap: var(--s1); }
 /* Each row is a checkbox: importing is opt-out per field, since a stray
@@ -1135,6 +1141,135 @@ body[data-import="open"] .sheet > .gate-card { transform: none; }
   border-radius: var(--r1);
 }
 .import-foot { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+
+/* ── Tag picker ──────────────────────────────────────────────── */
+body[data-picker="open"] #pickerSheet { opacity: 1; }
+body[data-picker="open"] .picker-card { transform: none; }
+.picker-card {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  gap: var(--s3);
+  width: min(520px, 100%);
+  height: min(640px, calc(100dvh - 2 * var(--s5)));
+  padding: var(--s4);
+  background: var(--c2);
+  border: 1px solid var(--line);
+  border-radius: var(--r4);
+  box-shadow: var(--sh-lip), var(--sh-4);
+  transform: translateY(10px) scale(0.985);
+  transition: transform var(--t3) var(--e-out);
+}
+.picker-head { display: flex; align-items: center; gap: var(--s3); }
+.picker-title { display: flex; align-items: center; gap: var(--s2); margin-right: auto; }
+.picker-title .ico { color: var(--a); }
+.picker-title strong { font-size: var(--fz-lg); font-weight: 600; letter-spacing: -0.015em; }
+
+.picker-search {
+  display: flex; align-items: center;
+  background: var(--c1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r2);
+  transition: border-color var(--t1) var(--e), box-shadow var(--t1) var(--e);
+}
+.picker-search:focus-within { border-color: var(--a-line); box-shadow: var(--ring); }
+.picker-search > .ico { margin-left: 10px; color: var(--fg-4); }
+.picker-search input {
+  flex: 1; width: auto;
+  min-height: 38px;
+  background: transparent; border: 0; box-shadow: none;
+  font-size: var(--fz-lg);
+}
+.picker-search input:hover:not(:focus),
+.picker-search input:focus { background: transparent; box-shadow: none; }
+
+/* What this session put in, so it can be taken back out without hunting
+   through the prompt text. */
+.picker-chosen { display: grid; gap: var(--s2); }
+.picker-chosen > span { font-size: var(--fz-xs); color: var(--fg-4); }
+.picker-chosen > div { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.picker-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px;
+  font: 400 var(--fz-xs)/1.5 var(--mono);
+  color: var(--a);
+  background: var(--a-dim);
+  border: 1px solid var(--a-line);
+  border-radius: 20px;
+  transition: color var(--t1) var(--e), background var(--t1) var(--e);
+}
+.picker-chip i {
+  width: 7px; height: 7px; flex: none;
+  background: currentColor;
+  clip-path: polygon(14% 0, 50% 36%, 86% 0, 100% 14%, 64% 50%, 100% 86%, 86% 100%, 50% 64%, 14% 100%, 0 86%, 36% 50%, 0 14%);
+}
+.picker-chip:hover { color: var(--err); background: var(--err-dim); border-color: transparent; }
+
+.picker-status { min-height: 15px; font-size: var(--fz-sm); color: var(--fg-3); }
+.picker-status[hidden] { display: none; }
+.picker-status.err { color: var(--err); }
+.picker-status.load { display: flex; align-items: center; gap: var(--s2); }
+.picker-status.load::before {
+  content: "";
+  flex: none; width: 11px; height: 11px;
+  border: 1.5px solid var(--line-2);
+  border-top-color: var(--a);
+  border-radius: 50%;
+  animation: tagSpin 620ms linear infinite;
+}
+
+.picker-results {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  display: grid; gap: 1px;
+  align-content: start;
+}
+.picker-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 9px;
+  color: var(--fg-2);
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: var(--r2);
+  transition: color var(--t1) var(--e), background var(--t1) var(--e),
+    border-color var(--t1) var(--e);
+}
+.picker-row:hover, .picker-row.on { color: var(--fg); background: var(--c4); }
+/* Already in the prompt: clicking again removes it. */
+.picker-row[aria-pressed="true"] {
+  color: var(--fg);
+  background: var(--a-dim);
+  border-color: var(--a-line);
+}
+.picker-row[aria-pressed="true"] .picker-names strong::after {
+  content: "";
+  display: inline-block;
+  width: 9px; height: 9px;
+  margin-left: 6px;
+  background: var(--a);
+  clip-path: polygon(19% 52%, 36% 68%, 82% 22%, 92% 33%, 37% 87%, 8% 60%);
+}
+.picker-names { display: grid; gap: 1px; overflow: hidden; }
+.picker-names strong,
+.picker-names span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.picker-names strong { font: 500 var(--fz-md)/1.35 var(--mono); }
+.picker-names span { font-size: var(--fz-sm); color: var(--fg-3); }
+.picker-meta {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 400 var(--fz-xs)/1.3 var(--mono);
+  color: var(--fg-4);
+  white-space: nowrap;
+}
+.picker-foot {
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
+  font-size: var(--fz-xs); color: var(--fg-4);
+}
 
 /* ── Dropzone ────────────────────────────────────────────────── */
 .dropzone {
@@ -1288,7 +1423,7 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   /* The import list is short, so a bottom sheet beats a full-height page —
      but override the .gate-card rule above, which it otherwise inherits. */
   .sheet { padding: 0; align-items: end; }
-  .sheet > .gate-card {
+  #importSheet > .gate-card {
     width: 100%; min-height: 0; max-height: 88dvh;
     border: 0; border-radius: var(--r4) var(--r4) 0 0;
     padding: var(--s5) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom));
@@ -1297,6 +1432,18 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   }
   .import-row { padding: 9px; }
   .dropzone-card { padding: var(--s6) var(--s5); }
+
+  /* Tall sheet: the list is the point, and the on-screen keyboard will take
+     the lower half once the field is focused. */
+  .picker-card {
+    width: 100%;
+    height: 88dvh;
+    border: 0;
+    border-radius: var(--r4) var(--r4) 0 0;
+    padding: var(--s4) var(--s3) calc(var(--s3) + env(safe-area-inset-bottom));
+    transform: translateY(12px);
+  }
+  .picker-row { min-height: 48px; }
 }
 
 @media (max-width: 480px) {
