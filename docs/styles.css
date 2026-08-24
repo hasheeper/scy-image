@@ -405,8 +405,10 @@ select option { background: var(--c2); }
 }
 [data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 260ms; }
 .stage-tools [data-tip]::after,
+.tray [data-tip]::after,
 .topbar-end [data-tip]::after { left: auto; right: 0; transform: translate(0, -3px); }
 .stage-tools [data-tip]:hover::after,
+.tray [data-tip]:hover::after,
 .topbar-end [data-tip]:hover::after { transform: translate(0, 0); }
 
 /* ── Buttons ─────────────────────────────────────────────────── */
@@ -1013,6 +1015,20 @@ body[data-hist="off"] .gallery { border-left-color: transparent; }
 .tile img { display: block; width: 100%; height: auto; }
 .tile:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--line-2), 0 6px 14px -4px rgba(0,0,0,.6); }
 .tile[aria-current="true"] { box-shadow: 0 0 0 1.5px var(--a); }
+
+/* Placeholder for the image still being generated. Same sweep as the stage
+   skeleton so the rail and the viewport read as one pending operation. It is
+   not a button: there is nothing to show yet. */
+.tile-pending {
+  background:
+    linear-gradient(170deg, rgba(255, 255, 255, 0.026), transparent 62%),
+    var(--c1);
+  box-shadow: 0 0 0 1px var(--a-line);
+  cursor: default;
+  /* aspect-ratio is set inline from the frozen request shape */
+  content-visibility: visible;   /* never skip paint: it is the active element */
+}
+.tile-pending:hover { transform: none; box-shadow: 0 0 0 1px var(--a-line); }
 .tile-x {
   position: absolute; top: 3px; right: 3px;
   width: 17px; height: 17px;

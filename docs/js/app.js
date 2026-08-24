@@ -96,11 +96,24 @@ function measureFit() {
   sizeSkeleton();
 }
 
+/* Shape of the request that is actually in flight. While it runs, the form is
+   still editable, so reading the inputs would let the placeholder morph into a
+   size the pending image will never have. Null when nothing is running. */
+let pendingShape = null;
+
+const pendingLabel = () => {
+  if (!pendingShape) return "";
+  const { width, height, index, total, composing } = pendingShape;
+  if (composing) return "正在合成对比图";
+  const which = total > 1 ? `生成中 · 第 ${index}/${total} 张` : "生成中";
+  return `${which} · ${width}×${height}`;
+};
+
 /* Skeleton mirrors the pending image's shape, letterboxed into the same box. */
 function sizeSkeleton() {
   if (!fitW || !fitH) return;
-  const aw = Number($("width").value) || 1;
-  const ah = Number($("height").value) || 1;
+  const aw = pendingShape?.width || Number($("width").value) || 1;
+  const ah = pendingShape?.height || Number($("height").value) || 1;
   const scale = Math.min(fitW / aw, fitH / ah, 1);
   const sk = $("skeleton");
   sk.style.setProperty("--sk-w", `${Math.round(aw * scale)}px`);
@@ -483,7 +496,24 @@ function renderGallery() {
   tray.innerHTML = "";
   $("histCount").textContent = String(items.length);
   $("clearHist").hidden = items.length === 0;
-  $("trayEmpty").hidden = items.length !== 0;
+  $("trayEmpty").hidden = items.length !== 0 || !!pendingShape;
+
+  /* A placeholder for the image still being generated. Without it, browsing
+     back to an earlier result during a batch left no sign that anything was
+     still running — the rail looked idle and the new image arrived from
+     nowhere. It leads the list because history is newest-first. */
+  if (pendingShape) {
+    const slot = document.createElement("div");
+    slot.className = "tile tile-pending";
+    slot.setAttribute("role", "status");
+    slot.setAttribute("aria-label", pendingLabel());
+    slot.dataset.tip = pendingLabel();
+    slot.style.aspectRatio = `${pendingShape.width} / ${pendingShape.height}`;
+    const glow = document.createElement("div");
+    glow.className = "shimmer";
+    slot.append(glow);
+    tray.append(slot);
+  }
 
   for (const item of items) {
     seen.add(item.id);
@@ -795,6 +825,11 @@ async function runBatch(base) {
   try {
     for (let index = 0; index < total; index += 1) {
       if (cancelRequested) throw new DOMException("已取消", "AbortError");
+      /* Claim the next slot before the quota check, not after: that check is a
+         network round trip, and until the placeholder advances it still names
+         the image that just finished. */
+      pendingShape = { ...pendingShape, index: index + 1, total };
+      renderGallery();
       if (index > 0) {
         if (!batchRestricted) await refreshQuota({ force: true, announce: true });
         if (batchRestricted) {
@@ -858,7 +893,11 @@ async function runBatch(base) {
       $("stageTitle").textContent = "正在整理批次";
       $("stageSub").textContent = `已完成 ${completed}/${total}`;
       $("busyNote").textContent = "图片已全部生成 · 正在本地合成对比图";
+      // Every image is done; the remaining work is local compositing, so the
+      // rail should say that rather than keep counting requests.
+      pendingShape = { ...pendingShape, composing: true };
       setState("busy");
+      renderGallery();
       try {
         const comparison = await addComparison(completedRecords, base);
         showEntry(comparison);
@@ -941,7 +980,10 @@ async function run() {
     return;
   }
 
+  // Freeze the shape before the first request; the form stays editable.
+  pendingShape = { width: params.width, height: params.height, index: 1, total: params.batchCount };
   sizeSkeleton();
+  renderGallery();
   jobActive = true;
   cancelRequested = false;
   setBusy(true);
@@ -966,6 +1008,9 @@ async function run() {
     cancelRequested = false;
     setBusy(false);
     controller = null;
+    pendingShape = null;
+    renderGallery();
+    sizeSkeleton();
     validateSize();
   }
 }
