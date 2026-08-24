@@ -7,6 +7,7 @@ import { convertToNaiPrompt } from "./prompt-converter.js";
 import { quotaPolicy, recordSuccessfulImage } from "./quota-policy.js";
 import { toast } from "./toast.js";
 import { takePendingTags } from "./tag-handoff.js";
+import { readImageParams } from "./image-meta.js";
 
 const $ = (id) => document.getElementById(id);
 const body = document.body;
@@ -528,6 +529,13 @@ function renderGallery() {
       renderGallery();
     });
     tile.append(x);
+
+    // Draggable onto the composer to reopen its parameters.
+    tile.draggable = true;
+    tile.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("application/x-scylla-history", item.id);
+      event.dataTransfer.effectAllowed = "copy";
+    });
 
     tile.addEventListener("click", () => showEntry(item));
     tray.append(tile);
@@ -1077,23 +1085,72 @@ $("copyBtn").addEventListener("click", async () => {
   }
 });
 
+/* Re-run every derived view after the form is written to programmatically.
+   Assigning .value fires no input event, so nothing downstream updates on
+   its own — the highlight mirror in particular would keep the old text. */
+function syncAfterFormWrite() {
+  customMode = !RATIOS.some(
+    (r) => !r.custom && r.w === Number($("width").value) && r.h === Number($("height").value)
+  );
+  refreshHighlights();
+  syncRangeLabels();
+  syncModelHint();   // -> validateSize() -> syncRatioSelection()
+  syncAdvBadge();
+  syncGenerateLabel();
+  syncPromptCount();
+  sizeSkeleton();
+  persist();
+}
+
+/* Write a subset of generation parameters into the form. Keys absent from
+   `fields` are left alone, which is what makes partial imports safe. */
+function applyParams(fields) {
+  const applied = [];
+  const set = (key, id, value) => {
+    if (value === undefined) return;
+    $(id).value = value;
+    applied.push(key);
+  };
+
+  set("prompt", "prompt", fields.prompt);
+  set("negative_prompt", "negative", fields.negative_prompt);
+  if (fields.model !== undefined && catalog.models.some((m) => m.id === fields.model)) {
+    set("model", "model", fields.model);
+  }
+  set("width", "width", fields.width);
+  set("height", "height", fields.height);
+  set("steps", "steps", fields.steps);
+  set("scale", "scale", fields.scale);
+  set("cfg", "cfg", fields.cfg);
+  if (fields.sampler !== undefined && catalog.samplers.includes(fields.sampler)) {
+    set("sampler", "sampler", fields.sampler);
+  }
+  if (fields.seed !== undefined) set("seed", "seed", fields.seed ?? "");
+  if (fields.batchCount !== undefined) {
+    setRequestedBatchCount(fields.batchCount);
+    applied.push("batchCount");
+  }
+
+  syncAfterFormWrite();
+  return applied;
+}
+
 $("reuseBtn").addEventListener("click", () => {
   if (!current?.params) return;
   const p = current.params;
-  $("prompt").value = p.prompt || "";
-  $("negative").value = p.negative_prompt || "";
-  if (catalog.models.some((m) => m.id === p.model)) $("model").value = p.model;
-  $("width").value = p.width;
-  $("height").value = p.height;
-  $("steps").value = p.steps;
-  $("scale").value = p.scale;
-  $("cfg").value = p.cfg;
-  if (catalog.samplers.includes(p.sampler)) $("sampler").value = p.sampler;
-  $("seed").value = p.isComparison ? (p.seedStart ?? "") : (p.seed ?? "");
-  setRequestedBatchCount(p.batchTotal || p.batchCount || 1);
-  customMode = !RATIOS.some((r) => !r.custom && r.w === p.width && r.h === p.height);
-  refreshHighlights();
-  syncRangeLabels(); syncModelHint(); syncAdvBadge(); syncGenerateLabel(); syncPromptCount(); sizeSkeleton(); persist();
+  applyParams({
+    prompt: p.prompt || "",
+    negative_prompt: p.negative_prompt || "",
+    model: p.model,
+    width: p.width,
+    height: p.height,
+    steps: p.steps,
+    scale: p.scale,
+    cfg: p.cfg,
+    sampler: p.sampler,
+    seed: p.isComparison ? (p.seedStart ?? "") : (p.seed ?? ""),
+    batchCount: p.batchTotal || p.batchCount || 1
+  });
   toast("参数已回填", "ok");
 });
 
@@ -1107,6 +1164,26 @@ $("clearHist").addEventListener("click", () => {
   setState("empty");
   for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = true;
   renderGallery();
+});
+
+/* ── Tag autocomplete toggle ───────────────────────────────── */
+/* Detaching rather than muting: with it off no keystroke should reach the
+   dictionary service at all, which is the point of the switch. */
+let detachAutocomplete = [];
+
+function setTagAutocomplete(on) {
+  for (const detach of detachAutocomplete) detach();
+  detachAutocomplete = on
+    ? ["prompt", "negative"].map((id) => attachTagAutocomplete($(id)))
+    : [];
+  $("tagSuggest").checked = on;
+}
+
+$("tagSuggest").addEventListener("change", (e) => {
+  const on = e.target.checked;
+  setTagAutocomplete(on);
+  prefs.save({ tagSuggest: on });
+  toast(on ? "已开启 Tag 自动补全" : "已关闭 Tag 自动补全", "ok");
 });
 
 $("histToggle").addEventListener("click", () => {
@@ -1133,13 +1210,219 @@ $("image").addEventListener("click", openZoom);
 $("lightboxClose").addEventListener("click", closeZoom);
 $("lightbox").addEventListener("click", (e) => { if (e.target !== $("lightboxImg")) closeZoom(); });
 
+/* ── Import parameters from an image ───────────────────────── */
+/* Labels and the order rows appear in. Prompt first because it is what the
+   reader checks to decide whether this is even the right image. */
+const IMPORT_ROWS = [
+  { key: "prompt", label: "描述", wide: true },
+  { key: "negative_prompt", label: "排除", wide: true },
+  { key: "model", label: "模型" },
+  { key: "width", label: "宽" },
+  { key: "height", label: "高" },
+  { key: "steps", label: "步数" },
+  { key: "sampler", label: "采样器" },
+  { key: "scale", label: "Scale" },
+  { key: "cfg", label: "CFG" },
+  { key: "seed", label: "Seed" }
+];
+
+let importCandidate = null;
+let lastImportFocus = null;
+
+function closeImport() {
+  body.dataset.import = "closed";
+  setTimeout(() => { $("importSheet").hidden = true; }, 320);
+  importCandidate = null;
+  lastImportFocus?.focus?.();
+  lastImportFocus = null;
+}
+
+function openImport(result) {
+  importCandidate = result;
+  const list = $("importList");
+  list.replaceChildren();
+
+  const unusable = [];
+  for (const row of IMPORT_ROWS) {
+    const value = result.fields[row.key];
+    if (value === undefined) continue;
+
+    /* A model or sampler this deployment does not offer cannot be applied.
+       Offering the checkbox anyway would tick a box that does nothing. */
+    if (row.key === "model" && !catalog.models.some((m) => m.id === value)) {
+      unusable.push(`模型 ${value}`);
+      continue;
+    }
+    if (row.key === "sampler" && !catalog.samplers.includes(value)) {
+      unusable.push(`采样器 ${value}`);
+      continue;
+    }
+
+    const label = document.createElement("label");
+    label.className = `import-row${row.wide ? " wide" : ""}`;
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = true;
+    box.dataset.field = row.key;
+    const tick = document.createElement("span");
+    tick.className = "box";
+    const key = document.createElement("span");
+    key.className = "k";
+    key.textContent = row.label;
+    const shown = document.createElement("span");
+    shown.className = "v";
+    // An empty string is a real value here: importing it clears the field.
+    shown.textContent = String(value) === "" ? "（清空）" : String(value);
+    label.append(box, tick, key, shown);
+    list.append(label);
+  }
+
+  /* Name what will not carry over, so a dropped field does not read as the
+     import having silently misfired. */
+  const absent = ["model", "cfg"]
+    .filter((k) => result.fields[k] === undefined)
+    .map((k) => (k === "model" ? "模型" : "CFG"));
+  const notes = [];
+  if (absent.length) notes.push(`未包含${absent.join("与")}`);
+  if (unusable.length) notes.push(`不支持${unusable.join("、")}`);
+  const note = $("importSkipped");
+  note.hidden = !notes.length;
+  note.textContent = notes.length ? `${notes.join("；")}，保持当前设置不变。` : "";
+
+  $("importFrom").textContent = `${result.name} · ${result.dialect} 格式`;
+  lastImportFocus = document.activeElement;
+  $("importSheet").hidden = false;
+  requestAnimationFrame(() => { body.dataset.import = "open"; });
+  setTimeout(() => $("importApply").focus(), 300);
+}
+
+async function readAndOpen(file) {
+  try {
+    openImport(await readImageParams(file));
+  } catch (error) {
+    toast(error.message || "读取失败");
+  }
+}
+
+$("importApply").addEventListener("click", () => {
+  if (!importCandidate) return;
+  const wanted = new Set(
+    [...$("importList").querySelectorAll("input:checked")].map((el) => el.dataset.field)
+  );
+  if (!wanted.size) {
+    toast("没有勾选任何参数");
+    return;
+  }
+  const fields = {};
+  for (const [key, value] of Object.entries(importCandidate.fields)) {
+    if (wanted.has(key)) fields[key] = value;
+  }
+  const applied = applyParams(fields);
+  closeImport();
+  toast(`已导入 ${applied.length} 项参数`, "ok");
+});
+
+$("importCancel").addEventListener("click", closeImport);
+$("importSheet").addEventListener("click", (e) => {
+  if (e.target === $("importSheet")) closeImport();
+});
+
+$("importBtn").addEventListener("click", () => { if (!gateBlocking()) $("importFile").click(); });
+$("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  // Reset first so picking the same file twice still fires a change event.
+  e.target.value = "";
+  if (file) await readAndOpen(file);
+});
+
+/* Drag and drop. dragenter/dragleave fire for every child element crossed,
+   so track depth instead of toggling on each event. */
+let dragDepth = 0;
+/* Ignore drops while the key gate is up: the form behind it is not ready to
+   receive values, and stacking a second dialog over the gate reads as broken. */
+const gateBlocking = () => !$("gate").hidden;
+const hasFiles = (e) => !gateBlocking() && [...(e.dataTransfer?.types || [])].includes("Files");
+
+window.addEventListener("dragenter", (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth += 1;
+  body.dataset.drop = "on";
+});
+window.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener("dragleave", (e) => {
+  if (!hasFiles(e)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) body.dataset.drop = "off";
+});
+window.addEventListener("drop", async (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  body.dataset.drop = "off";
+  const file = [...(e.dataTransfer.files || [])].find((f) => /^image\/(png|jpeg)$/.test(f.type));
+  if (!file) {
+    toast("请拖入 PNG 或 JPEG 图片");
+    return;
+  }
+  await readAndOpen(file);
+});
+
+/* A dragged history tile carries its record id. Reading pixels back would be
+   the worse source: the stored params are exact, whereas re-parsing loses
+   whatever the encoder dropped — and JPEG output has no chunks at all. */
+const HISTORY_MIME = "application/x-scylla-history";
+
+const hasHistoryDrag = (e) => !gateBlocking() && !!e.dataTransfer?.types?.includes(HISTORY_MIME);
+
+window.addEventListener("dragenter", (e) => {
+  if (!hasHistoryDrag(e)) return;
+  e.preventDefault();
+  dragDepth += 1;
+  body.dataset.drop = "on";
+});
+window.addEventListener("dragover", (e) => {
+  if (hasHistoryDrag(e)) e.preventDefault();
+});
+window.addEventListener("drop", (e) => {
+  if (gateBlocking()) return;
+  const id = e.dataTransfer?.getData(HISTORY_MIME);
+  if (!id) return;
+  e.preventDefault();
+  dragDepth = 0;
+  body.dataset.drop = "off";
+  const item = history.get(id);
+  if (!item?.params) {
+    toast("这张图的参数已不在会话中");
+    return;
+  }
+  const p = item.params;
+  openImport({
+    name: p.modelName || "历史记录",
+    dialect: "本次会话",
+    fields: {
+      prompt: p.prompt || "",
+      negative_prompt: p.negative_prompt || "",
+      model: p.model,
+      width: p.width,
+      height: p.height,
+      steps: p.steps,
+      sampler: p.sampler,
+      scale: p.scale,
+      cfg: p.cfg,
+      seed: p.isComparison ? (p.seedStart ?? "") : (p.seed ?? "")
+    }
+  });
+});
+
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
     e.preventDefault();
     if (!$("goBtn").disabled) run();
   }
   if (e.key === "Escape") {
-    if (body.dataset.zoom === "on") closeZoom();
+    if (body.dataset.import === "open") closeImport();
+    else if (body.dataset.zoom === "on") closeZoom();
     else if (controller) controller.abort();
   }
 });
@@ -1351,8 +1634,7 @@ async function boot() {
   restore();
   refreshPromptHL = attachHighlight($("prompt"));
   refreshNegativeHL = attachHighlight($("negative"));
-  attachTagAutocomplete($("prompt"));
-  attachTagAutocomplete($("negative"));
+  setTagAutocomplete(prefs.load().tagSuggest !== false);
 
   /* The prompt box fills the rail by default; dragging the handle pins it.
      Must run after attach(), which is what creates .hl-wrap. */

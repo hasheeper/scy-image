@@ -301,6 +301,13 @@ export function attachTagAutocomplete(textarea, { maxResults = 20 } = {}) {
   return () => {
     dismiss();
     observer.disconnect();
+    /* Clear the guard flag and the ARIA wiring, otherwise a later re-attach
+       is refused by the check at the top and the textarea keeps advertising
+       a listbox that no longer exists. */
+    delete textarea.dataset.tagAutocomplete;
+    for (const attribute of ["aria-autocomplete", "aria-controls", "aria-expanded", "aria-haspopup"]) {
+      textarea.removeAttribute(attribute);
+    }
     textarea.removeEventListener("input", schedule);
     textarea.removeEventListener("click", schedule);
     textarea.removeEventListener("compositionstart", onCompositionStart);

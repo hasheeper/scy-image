@@ -56,6 +56,22 @@ npm start   # → http://127.0.0.1:3215
 - **不压缩**（`optimize: false`）— 返回全质量 PNG。开启后上游会转为 JPEG（有损）。
 - **不改写 Prompt**（`transform_prompt: false`）— 不经过任何 LLM 处理。
 
+## 从图片导入参数
+
+- **拖到页面任意位置**即可读取：外部 PNG / JPEG，或直接拖动右侧历史缩略图。
+  顶栏的导入按钮也可打开文件选择。
+- 识别两种写法：NovelAI 的 PNG `Comment` 块（含 `zTXt` / `iTXt` 压缩形式与
+  JPEG EXIF），以及 WebUI / A1111 的 `parameters` 块。
+- 弹窗逐项列出读到的值，**默认全选、可单独取消**；未勾选的字段保持当前设置不变。
+  图片里没有的字段（多数外部图没有模型与 CFG）、以及本部署不支持的模型或采样器，
+  会明确写在弹窗里而不是静默忽略。
+- 拖动历史图走的是会话里存的原始参数，而不是重新解析像素 —— 后者会丢失编码时
+  被丢弃的信息，开启「压缩体积」后导出的 JPEG 更是完全没有参数块。
+- NAI 的 `scale` 与 WebUI 的 `CFG scale` 都是引导强度，对应本站的 Scale。
+  NAI 的 `cfg_rescale` 是 0–1 的另一个量，**不会**被写进本站 0–30 的 CFG。
+- 采样器名会做映射（`Euler a` → `k_euler_ancestral`、`DPM++ 2M Karras` →
+  `k_dpmpp_2m` 等）；无法映射时该行不出现。
+
 ## 串行批量与生成锁
 
 - 参数面板可设置一次生成 **1–24 张**。每张完成后才会提交下一张，不会并行请求。
@@ -89,6 +105,8 @@ npm start   # → http://127.0.0.1:3215
 - 组合保存在浏览器本地，刷新不丢；清空前会确认。
 - 类型筛选会在搜索页和输入补全之间同步；通用、作品、角色默认开启，画师与元数据
   默认关闭，可按需开启。
+- 左栏「编辑器」里可关闭 Tag 自动补全。关闭后会真正卸载监听，输入时不再向词典
+  服务发出任何请求，也不再弹出候选；该开关独立持久化，不受「恢复默认」影响。
 - 描述和排除栏的「清洗格式」会保留换行，清理转义下划线、HTML 空格与续行符，
   并将 `(tag)`、`((tag))`、`(tag:0.9)` 转为 NAI 数值权重；角色、作品和画师的消歧括号会保留。
 - 双语结果来自 `tagsuggest.zeabur.app`，英文查询必要时回退 Danbooru 官方自动补全接口。
@@ -142,6 +160,7 @@ docs/               ← GitHub Pages 根目录
     tag-autocomplete.js  Prompt 自动补全
     tags-page.js    Tag 搜索、分页与 Prompt 组合
     tag-handoff.js  组合交接给生成器（本地暂存，30 分钟过期）
+    image-meta.js   读取 PNG/JPEG 里的 NovelAI 与 WebUI 生成参数
     prompt-converter.js  WebUI 括号权重 → NAI 数值权重
     highlight.js    NAI 权重语法高亮
     toast.js        两页共用的浮层提示

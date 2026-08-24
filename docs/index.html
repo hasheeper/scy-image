@@ -59,6 +59,9 @@
         <symbol id="i-search" viewBox="0 0 24 24">
           <circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4 4" />
         </symbol>
+        <symbol id="i-import" viewBox="0 0 24 24">
+          <path d="M12 15.5V4.5" /><path d="m7.5 10 4.5 4.5 4.5-4.5" /><path d="M4.5 17.5v1a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1" />
+        </symbol>
       </defs>
     </svg>
 
@@ -125,6 +128,9 @@
       </div>
       <div class="topbar-end">
         <span class="chip" id="modeChip"></span>
+        <button class="ibtn" id="importBtn" type="button" data-tip="导入参数" aria-label="从图片导入参数">
+          <svg class="ico"><use href="#i-import" /></svg>
+        </button>
         <a class="ibtn" href="./tags.html" target="_blank" rel="noopener" data-tip="Tag 词典" aria-label="打开 Tag 词典">
           <svg class="ico"><use href="#i-search" /></svg>
         </a>
@@ -238,6 +244,23 @@
               </button>
             </div>
           </details>
+
+          <!-- Editor preferences sit apart from 参数: they are not sent
+               upstream and must survive 恢复默认. -->
+          <details class="drawer" id="editorPrefs">
+            <summary>
+              <span>编辑器</span>
+              <i class="caret" aria-hidden="true"></i>
+            </summary>
+            <div class="drawer-body">
+              <div class="switches">
+                <label class="check">
+                  <input id="tagSuggest" type="checkbox" checked><span></span>Tag 自动补全<i class="sub">输入时查词典</i>
+                </label>
+              </div>
+              <p class="hint">关闭后不再发送查询，也不弹出候选。</p>
+            </div>
+          </details>
         </div>
 
         <div class="composer-foot">
@@ -335,6 +358,36 @@
         <svg class="ico"><use href="#i-close" /></svg>
       </button>
     </div>
+
+    <!-- ══ Import parameters ══════════════════════════════════ -->
+    <div class="sheet" id="importSheet" hidden>
+      <div class="gate-card" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+        <div class="gate-brand">
+          <svg class="ico ico-lg"><use href="#i-import" /></svg>
+          <h1 id="importTitle">导入参数</h1>
+        </div>
+        <p class="lede" id="importFrom"></p>
+
+        <div class="import-list" id="importList"></div>
+        <p class="hint" id="importSkipped" hidden></p>
+
+        <div class="import-foot">
+          <button class="btn btn-quiet" id="importCancel" type="button">取消</button>
+          <button class="btn btn-primary" id="importApply" type="button">应用所选</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drop anywhere; the overlay is only the confirmation that we caught it. -->
+    <div class="dropzone" id="dropzone" aria-hidden="true">
+      <div class="dropzone-card">
+        <svg class="ico ico-xl"><use href="#i-import" /></svg>
+        <strong>松手读取参数</strong>
+        <span>PNG 或 JPEG · 支持历史缩略图</span>
+      </div>
+    </div>
+
+    <input id="importFile" type="file" accept="image/png,image/jpeg" hidden>
 
     <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
     <script type="module" src="./js/app.js"></script>
