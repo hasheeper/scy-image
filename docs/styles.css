@@ -13,39 +13,46 @@
      to saturated artwork; a cool cast makes warm colours pop. The
      blue shift (B−R) grows with lightness: +2 → +8.
 
-     Every adjacent pair is held at ≥1.15 contrast, because below
-     ~1.10 a boundary is not perceivable and the level might as well
-     not exist. The previous ramp ran 1.042/1.053/1.075/1.117 — it
-     declared five levels and showed one. Worse, the topbar, composer,
-     stage, viewport and gallery ALL painted --c0, so the five main
-     regions had 1.000 contrast between them: no panel structure at
-     all, just controls scattered on one black board. That, not the
-     hue, was what read as unprofessional.
+     Steps are set by ΔL* (perceptual lightness), NOT by WCAG contrast
+     ratio. CR exists to predict text legibility; its +0.05 term
+     dominates at the dark end, so a fixed CR target demands a far
+     bigger perceptual jump near black than it does at mid grey. An
+     earlier pass here chased "CR ≥ 1.15" from a near-black canvas and
+     produced ΔL* = +13 between the viewport and the panels — two to
+     four times what any shipping product uses, which read as a rift
+     down the middle of the window rather than as structure:
 
-     The image still wins. --canvas is the darkest surface on screen
-     (darker than the old page colour), so a print laid on it gets
-     20.0:1 against white — slightly MORE separation than before.
-     Chrome rose; the mat got darker. */
-  --canvas: #08080a;   /* viewport — the mat a print sits on */
-  --sunken: #1a1a1d;   /* inputs, wells, thumbnails */
-  --chrome: #26262a;   /* topbar, composer, stage head, gallery */
-  --raised: #303036;   /* cards, drawers, sheets, tooltips */
-  --hover:  #393941;   /* pointer feedback on raised things */
+       VS Code  +3.45    Notion  +3.49
+       Linear   +5.15    Figma   +6.74
 
-  --line: #34343b;     /* 1.22 on chrome, 1.62 on canvas */
-  --line-2: #3f3f49;
+     This ramp holds ΔL* ≈ +4 per step, inside that band. The original
+     problem still had to be fixed: topbar, composer, stage, viewport
+     and gallery all painted the same colour, so the five main regions
+     had zero separation and the app read as controls scattered on one
+     black board. Panels are now distinct — by one step, not a chasm.
 
-  /* Anchored against --raised, not --chrome. Text tokens have to clear
-     AA on the LIGHTEST surface they can land on: labels and hints sit
-     inside drawers and cards too, and a value tuned for the panel
-     silently fails one level up. Measuring rendered pixels caught
-     exactly that — .chip came out at 2.79 while the arithmetic said
-     3.20, because .chip sits on --raised.
-     --fg-3 clears AA (4.57) everywhere; it was 3.34 before. */
-  --fg: #f6f6f9;
-  --fg-2: #bdbdc4;   /* 7.02 on raised */
-  --fg-3: #98989f;   /* 4.57 on raised — AA */
-  --fg-4: #797980;   /* 3.03 on raised — decorative/large only */
+     Absolute level stays close to the original near-black, because the
+     point of this UI is that the picture is the bright object. White
+     on --canvas is still 19.3:1. */
+  --canvas: #0e0e10;   /* viewport — the mat a print sits on */
+  --sunken: #141417;   /* inputs, wells, thumbnails */
+  --chrome: #18181c;   /* topbar, composer, stage head, gallery */
+  --raised: #202026;   /* cards, drawers, sheets, tooltips */
+  --hover:  #282830;   /* pointer feedback on raised things */
+
+  --line: #222228;     /* ΔL* +5 over chrome */
+  --line-2: #2a2a33;   /* ΔL* +9 — emphasis dividers, focus wells */
+
+  /* Contrast ratio IS the right metric here — it is what WCAG models.
+     Anchored against --raised, the lightest surface any of these can
+     land on: labels and hints sit inside drawers and cards too, and a
+     value tuned for the panel silently fails one level up. Measuring
+     rendered pixels caught exactly that — .chip came out at 2.79 while
+     the arithmetic said 3.20, because .chip sits on --raised. */
+  --fg: #eaeaed;
+  --fg-2: #aaaab0;   /* 7.01 on raised */
+  --fg-3: #88888f;   /* 4.60 on raised — AA */
+  --fg-4: #6c6c73;   /* 3.11 on raised — decorative/large only */
 
   --a: #b3a1ff;
   --a-ink: #17132a;
