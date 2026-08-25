@@ -147,30 +147,42 @@
       <!-- ── Composer ───────────────────────────────────────── -->
       <form class="composer" id="form">
         <div class="composer-scroll">
-          <div class="fld fld-hero">
-            <div class="fld-top">
-              <label for="prompt">描述（可选）</label>
-              <div class="fld-actions">
-                <button class="prompt-convert" type="button" data-convert-prompt="prompt" aria-label="清洗描述格式">
-                  <svg class="ico"><use href="#i-convert" /></svg>清洗格式
+          <!-- Prompt and Negative are one block with two tabs, not two stacked
+               fields. They are never needed at the same time, and stacking them
+               forced the primary input to share the rail with a box that is
+               usually set once and forgotten. Both textareas stay in the DOM so
+               values, highlight mirrors and autocomplete survive switching. -->
+          <div class="fld fld-hero promptbox" data-tab="prompt">
+            <div class="promptbox-head">
+              <div class="tabs" role="tablist" aria-label="Prompt">
+                <button class="tab" type="button" role="tab" id="tabPrompt"
+                        data-tab="prompt" aria-controls="panePrompt" aria-selected="true" tabindex="0">
+                  <span>Prompt</span><span class="tab-count" id="promptCount">0</span>
                 </button>
-                <button class="prompt-convert" type="button" data-open-picker aria-label="查词插入">
-                  <svg class="ico"><use href="#i-search" /></svg>查词
+                <button class="tab" type="button" role="tab" id="tabNegative"
+                        data-tab="negative" aria-controls="paneNegative" aria-selected="false" tabindex="-1">
+                  <span>Negative</span><span class="tab-count" id="negativeCount">0</span>
+                </button>
+              </div>
+              <div class="fld-actions">
+                <button class="ibtn ibtn-xs" type="button" id="convertBtn"
+                        data-tip="Clean up" aria-label="清洗当前输入的格式">
+                  <svg class="ico"><use href="#i-convert" /></svg>
+                </button>
+                <button class="ibtn ibtn-xs" type="button" data-open-picker
+                        data-tip="Browse tags" aria-label="查词插入">
+                  <svg class="ico"><use href="#i-search" /></svg>
                 </button>
               </div>
             </div>
-            <textarea id="prompt" placeholder="输入中文或英文 Tag，可自动补全" autocomplete="off" spellcheck="false"></textarea>
-            <div class="fld-foot"><span id="promptCount">0</span></div>
-          </div>
-
-          <div class="fld">
-            <div class="fld-top">
-              <label for="negative">排除</label>
-              <button class="prompt-convert" type="button" data-convert-prompt="negative" aria-label="清洗排除词格式">
-                <svg class="ico"><use href="#i-convert" /></svg>清洗格式
-              </button>
+            <div class="promptbox-body" id="promptboxBody">
+              <div class="pane" id="panePrompt" role="tabpanel" aria-labelledby="tabPrompt" tabindex="-1">
+                <textarea id="prompt" placeholder="输入中文或英文 Tag，可自动补全" autocomplete="off" spellcheck="false"></textarea>
+              </div>
+              <div class="pane" id="paneNegative" role="tabpanel" aria-labelledby="tabNegative" tabindex="-1" hidden>
+                <textarea id="negative" placeholder="lowres, blurry, watermark…" autocomplete="off" spellcheck="false"></textarea>
+              </div>
             </div>
-            <textarea id="negative" rows="2" placeholder="lowres, blurry, watermark…" autocomplete="off" spellcheck="false"></textarea>
           </div>
 
           <div class="fld">

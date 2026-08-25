@@ -215,25 +215,6 @@ select option { background: var(--raised); }
 .fld-group { display: grid; gap: var(--sp-3); }
 .fld-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 22px; }
 .fld-actions { display: flex; align-items: center; gap: var(--sp-2); }
-.tag-dict-link {
-  color: var(--fg-4);
-  font-size: var(--fz-2xs);
-  text-decoration: none;
-  transition: color var(--t1) var(--e);
-}
-.tag-dict-link:hover { color: var(--a); }
-.prompt-convert {
-  display: inline-flex; align-items: center; gap: var(--sp-1);
-  min-height: 22px; padding: 2px 6px;
-  color: var(--fg-4); border-radius: var(--r2); font-size: var(--fz-2xs);
-  transition: color var(--t1) var(--e), background var(--t1) var(--e),
-    transform var(--t1) var(--e);
-}
-.prompt-convert .ico { width: 12px; height: 12px; }
-.prompt-convert:hover { color: var(--a); background: var(--a-dim); }
-.prompt-convert:active { transform: scale(0.94); }
-/* Settled state after a successful clean — reverts on the next edit. */
-.prompt-convert[data-state="done"] { color: var(--ok); }
 .fld label, .slider-top label {
   font-size: var(--fz-xs); font-weight: 500;
   color: var(--fg-3);
@@ -264,7 +245,7 @@ select option { background: var(--raised); }
   flex: 1 1 auto !important;
   min-height: 190px;
   display: grid;
-  /* label row + input row; the counter is absolutely positioned. */
+  /* tab row + input row */
   grid-template-rows: auto minmax(0, 1fr);
 }
 /* The wrapper takes the flexible row; the textarea fills it. All text metrics
@@ -272,7 +253,74 @@ select option { background: var(--raised); }
 /* The wrapper is a bounded scroller filling the flexible row. The textarea
    inside is unbounded (auto-grown), which is what makes the wrapper scroll. */
 .fld-hero .hl-wrap { height: 100%; min-height: 0; }
+/* Under the tab strip the well's top edge is the strip's own border, so the
+   top corners square off and the top border is dropped to avoid a double line. */
+.pane .hl-wrap {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top-color: transparent;
+}
 .fld-hero[data-resized="1"] { flex: none !important; }
+
+/* ── Prompt / Negative tabs ──────────────────────────────────── */
+/* One block, two panes. The inactive pane keeps its DOM (values, highlight
+   mirror, autocomplete bindings) and is only hidden, so switching is free
+   and nothing has to be re-attached. */
+.promptbox { gap: 0; }
+.promptbox-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  /* The tab strip sits on this line and the active tab bridges it. */
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+}
+.promptbox .fld-actions { padding-bottom: var(--sp-1); }
+
+.tabs { display: flex; align-items: flex-end; gap: 2px; min-width: 0; }
+.tab {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px var(--sp-3) 7px;
+  color: var(--fg-3);
+  font-size: var(--fz-xs); font-weight: 500;
+  letter-spacing: -0.005em;
+  border-radius: var(--r2) var(--r2) 0 0;
+  white-space: nowrap;
+  transition: color var(--t1) var(--e), background var(--t1) var(--e);
+}
+.tab:hover { color: var(--fg-2); background: var(--sunken); }
+/* Underline drawn over the head's border so the active tab reads as attached
+   to the pane below it rather than floating above it. */
+.tab::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: var(--a);
+  border-radius: 2px 2px 0 0;
+  transform: scaleX(0);
+  transition: transform var(--t2) var(--e-out);
+}
+.tab[aria-selected="true"] { color: var(--fg); font-weight: 600; }
+.tab[aria-selected="true"]::after { transform: scaleX(1); }
+
+/* Reads as a count, not a badge — it must not compete with the label. */
+.tab-count {
+  font: 400 var(--fz-2xs) var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-4);
+  transition: color var(--t1) var(--e);
+}
+.tab[aria-selected="true"] .tab-count { color: var(--fg-3); }
+/* A non-empty Negative is worth noticing while you are on the Prompt tab:
+   it silently shapes every result. */
+.tab[aria-selected="false"] .tab-count[data-filled="1"] { color: var(--a); }
+
+.promptbox-body { position: relative; min-height: 0; display: grid; }
+.pane { min-height: 0; display: grid; }
+.pane[hidden] { display: none; }
+
 /* Anchored to the field, outside the scrolling text content. */
 .fld-foot {
   position: absolute;
@@ -432,6 +480,8 @@ select option { background: var(--raised); }
 .ibtn-xs { width: 26px; height: 26px; --ico: 14px; }
 .ibtn-accent { color: var(--a); }
 .ibtn-accent:hover { color: var(--a); background: var(--a-dim); }
+/* Settled state after a successful clean — reverts on the next edit. */
+.ibtn[data-state="done"] { color: var(--ok); }
 .ibtn[aria-pressed="false"] { color: var(--fg-4); }
 .ibtn[aria-pressed="false"]:hover { color: var(--fg-2); }
 
@@ -454,7 +504,9 @@ select option { background: var(--raised); }
 [data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 260ms; }
 .stage-tools [data-tip]::after,
 .tray [data-tip]::after,
+.fld-actions [data-tip]::after,
 .topbar-end [data-tip]::after { left: auto; right: 0; transform: translate(0, -3px); }
+.fld-actions [data-tip]:hover::after,
 .stage-tools [data-tip]:hover::after,
 .tray [data-tip]:hover::after,
 .topbar-end [data-tip]:hover::after { transform: translate(0, 0); }
@@ -1456,8 +1508,7 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   .check { min-height: 32px; }
   input[type="range"] { height: 28px; }
   .ratio { padding: 10px 4px 8px; }
-  .prompt-convert { min-height: 28px; padding-inline: 7px; }
-
+  
   .tag-suggest { padding: 4px; border-radius: 11px; }
   .tag-suggest-option { min-height: 44px; padding: 6px 8px; }
   .tag-suggest-names strong { font-size: var(--fz-sm); }

@@ -349,7 +349,15 @@ function syncRangeLabels() {
 }
 
 function syncPromptCount() {
-  $("promptCount").textContent = String($("prompt").value.length);
+  for (const [id, out] of [["prompt", "promptCount"], ["negative", "negativeCount"]]) {
+    const n = $(id).value.length;
+    const el = $(out);
+    el.textContent = String(n);
+    /* Lets the inactive tab flag that it holds content — a forgotten Negative
+       shapes every result and is otherwise invisible from the Prompt tab. */
+    if (n) el.dataset.filled = "1";
+    else delete el.dataset.filled;
+  }
 }
 
 function normalizedBatchCount(value) {
@@ -1078,20 +1086,64 @@ $("retryBtn").addEventListener("click", () => run());
 $("model").addEventListener("change", () => { syncModelHint(); persist(); });
 $("sampler").addEventListener("change", () => { syncAdvBadge(); persist(); });
 $("prompt").addEventListener("input", () => { syncPromptCount(); persistSoon(); });
-$("negative").addEventListener("input", persistSoon);
-document.querySelectorAll("[data-convert-prompt]").forEach((button) => {
-  const textarea = $(button.dataset.convertPrompt);
-  const settle = (label) => {
+$("negative").addEventListener("input", () => { syncPromptCount(); persistSoon(); });
+
+/* ── Prompt / Negative tabs ────────────────────────────────────
+   Both panes stay mounted; only visibility changes. Unmounting would drop
+   the highlight mirror and the autocomplete binding, and re-attaching them
+   on every switch is both slower and a source of drift. */
+const PROMPT_TABS = ["prompt", "negative"];
+
+function activeField() {
+  return $(document.querySelector(".promptbox").dataset.tab);
+}
+
+function showPromptTab(name, { focus = false } = {}) {
+  const box = document.querySelector(".promptbox");
+  if (!PROMPT_TABS.includes(name)) return;
+  box.dataset.tab = name;
+  for (const id of PROMPT_TABS) {
+    const on = id === name;
+    const tab = $(id === "prompt" ? "tabPrompt" : "tabNegative");
+    tab.setAttribute("aria-selected", String(on));
+    // Roving tabindex: the strip is one Tab stop, arrows move within it.
+    tab.tabIndex = on ? 0 : -1;
+    $(id === "prompt" ? "panePrompt" : "paneNegative").hidden = !on;
+  }
+  /* The mirror is inside a hidden pane while switching, so its wrapping was
+     computed at zero width. Re-measure now that it has a box again. */
+  refreshHighlights();
+  if (focus) activeField().focus();
+}
+
+for (const tab of document.querySelectorAll(".tab")) {
+  tab.addEventListener("click", () => showPromptTab(tab.dataset.tab, { focus: true }));
+  tab.addEventListener("keydown", (event) => {
+    const i = PROMPT_TABS.indexOf(tab.dataset.tab);
+    let next = null;
+    if (event.key === "ArrowRight") next = PROMPT_TABS[(i + 1) % PROMPT_TABS.length];
+    else if (event.key === "ArrowLeft") next = PROMPT_TABS[(i + PROMPT_TABS.length - 1) % PROMPT_TABS.length];
+    else if (event.key === "Home") next = PROMPT_TABS[0];
+    else if (event.key === "End") next = PROMPT_TABS[PROMPT_TABS.length - 1];
+    if (!next) return;
+    event.preventDefault();
+    showPromptTab(next);
+    $(next === "prompt" ? "tabPrompt" : "tabNegative").focus();
+  });
+}
+
+/* Acts on whichever pane is showing. A single button that follows the tab
+   beats two buttons where one is always inert. */
+{
+  const button = $("convertBtn");
+  const settle = (label, textarea) => {
     button.dataset.state = "done";
-    const restore = () => {
-      delete button.dataset.state;
-      textarea.removeEventListener("input", restore);
-    };
-    textarea.addEventListener("input", restore, { once: true });
+    textarea.addEventListener("input", () => { delete button.dataset.state; }, { once: true });
     toast(label, "ok");
   };
 
   button.addEventListener("click", () => {
+    const textarea = activeField();
     const before = textarea.value;
     if (!before.trim()) {
       toast("没有可清洗内容");
@@ -1099,7 +1151,7 @@ document.querySelectorAll("[data-convert-prompt]").forEach((button) => {
     }
     const converted = convertToNaiPrompt(before);
     if (converted === before) {
-      settle("格式已经是 NAI 写法");
+      settle("格式已经是 NAI 写法", textarea);
       return;
     }
     textarea.setRangeText(converted, 0, before.length, "end");
@@ -1108,9 +1160,9 @@ document.querySelectorAll("[data-convert-prompt]").forEach((button) => {
       inputType: "insertReplacementText",
       data: converted
     }));
-    settle("格式已清洗");
+    settle("格式已清洗", textarea);
   });
-});
+}
 
 
 
@@ -1427,8 +1479,10 @@ $("importSheet").addEventListener("click", (e) => {
 $("importBtn").addEventListener("click", () => { if (!gateBlocking()) $("importFile").click(); });
 
 /* Tag picker writes into the prompt directly. */
+/* Follows the active tab: browsing tags while on Negative should insert into
+   Negative, which is where you actually want exclusions to land. */
 const tagPicker = createTagPicker({
-  target: () => $("prompt"),
+  target: () => activeField(),
   onChange: () => { refreshHighlights(); syncPromptCount(); persistSoon(); }
 });
 $("importFile").addEventListener("change", async (e) => {
@@ -1746,21 +1800,27 @@ async function boot() {
      Must run after attach(), which is what creates .hl-wrap. */
   {
     const hero = $("prompt").closest(".fld-hero");
-    const wrap = hero.querySelector(".hl-wrap");
+    /* Both panes get the same height. Otherwise the block would jump on every
+       tab switch, and a drag on one tab would be silently lost on the other. */
+    const wraps = [...hero.querySelectorAll(".hl-wrap")];
     const savedH = prefs.load().promptH;
     if (savedH) {
-      wrap.style.height = `${savedH}px`;
+      for (const w of wraps) w.style.height = `${savedH}px`;
       hero.dataset.resized = "1";
     }
-    let seen = null;
-    new ResizeObserver(() => {
-      const h = Math.round(wrap.getBoundingClientRect().height);
-      if (seen !== null && Math.abs(h - seen) > 1 && wrap.style.height) {
-        hero.dataset.resized = "1";
-        prefs.save({ promptH: h });
-      }
-      seen = h;
-    }).observe(wrap);
+    for (const wrap of wraps) {
+      let seen = null;
+      new ResizeObserver(() => {
+        const h = Math.round(wrap.getBoundingClientRect().height);
+        // A hidden pane reports 0; that is not a user drag.
+        if (h > 0 && seen !== null && Math.abs(h - seen) > 1 && wrap.style.height) {
+          hero.dataset.resized = "1";
+          prefs.save({ promptH: h });
+          for (const other of wraps) if (other !== wrap) other.style.height = `${h}px`;
+        }
+        if (h > 0) seen = h;
+      }).observe(wrap);
+    }
   }
   const saved = prefs.load();
   if (saved.rail) document.documentElement.style.setProperty("--rail", `${saved.rail}px`);
@@ -1772,6 +1832,7 @@ async function boot() {
   );
   syncRangeLabels();
   syncRatioSelection();
+  syncPromptCount();   // tab labels carry the counts; they must not read 0 behind the gate
   measureFit();
 
   const status = await detectMode();
