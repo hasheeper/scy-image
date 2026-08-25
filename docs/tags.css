@@ -12,10 +12,10 @@
   height: auto;
   background:
     radial-gradient(760px 380px at 46% -140px, var(--a-glow), transparent 72%),
-    var(--c0);
+    var(--canvas);
 }
 .tags-topbar {
-  background: color-mix(in srgb, var(--c0) 91%, transparent);
+  background: color-mix(in srgb, var(--chrome) 91%, transparent);
   backdrop-filter: blur(16px);
 }
 .tags-brand { text-decoration: none; }
@@ -23,22 +23,22 @@
 
 /* ── Layout ──────────────────────────────────────────────────── */
 .tags-main {
-  width: min(1180px, calc(100% - var(--s8)));
+  width: min(1180px, calc(100% - var(--sp-6)));
   margin: 0 auto;
-  padding: clamp(var(--s8), 5vw, 58px) 0 var(--s10);
+  padding: clamp(var(--sp-6), 5vw, 58px) 0 var(--sp-7);
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--cart);
   align-items: start;
-  gap: var(--s6);
+  gap: var(--sp-5);
 }
 .tags-content { min-width: 0; }
 
 /* ── Hero ────────────────────────────────────────────────────── */
 .tags-hero { width: 100%; }
 .tags-kicker {
-  margin-bottom: var(--s2);
+  margin-bottom: var(--sp-2);
   color: var(--a);
-  font: 500 var(--fz-xs)/1.4 var(--mono);
+  font: 500 var(--fz-2xs)/1.4 var(--mono);
   letter-spacing: 0.14em;
 }
 .tags-hero h1 {
@@ -46,7 +46,7 @@
   line-height: 1.2;
   letter-spacing: -0.03em;
 }
-.tags-lede { margin-top: var(--s2); color: var(--fg-3); font-size: var(--fz-md); }
+.tags-lede { margin-top: var(--sp-2); color: var(--fg-3); font-size: var(--fz-sm); }
 
 /* ── Search ──────────────────────────────────────────────────── */
 /* A composed field: the wrapper owns the chrome and focus ring so the
@@ -55,9 +55,9 @@
   position: relative;
   display: flex;
   align-items: center;
-  margin-top: var(--s6);
+  margin-top: var(--sp-5);
   min-height: 50px;
-  background: color-mix(in srgb, var(--c1) 95%, transparent);
+  background: color-mix(in srgb, var(--sunken) 95%, transparent);
   border: 1px solid var(--line-2);
   border-radius: var(--r3);
   box-shadow: var(--sh-2), var(--sh-lip);
@@ -67,21 +67,21 @@
   border-color: var(--a-line);
   box-shadow: var(--ring), var(--sh-2);
 }
-.tags-search > .ico { margin-left: var(--s4); color: var(--fg-4); }
+.tags-search > .ico { margin-left: var(--sp-4); color: var(--fg-4); }
 .tags-search input[type="search"] {
   flex: 1;
   width: auto;
   min-height: 48px;
-  padding: 10px var(--s3);
+  padding: 10px var(--sp-3);
   background: transparent;
   border: 0;
   border-radius: var(--r3);
   box-shadow: none;
-  font-size: var(--fz-lg);
+  font-size: var(--fz-md);
 }
 .tags-search input:hover:not(:focus),
 .tags-search input:focus { background: transparent; box-shadow: none; }
-.tags-search .btn { align-self: stretch; margin: var(--s1); min-width: 66px; }
+.tags-search .btn { align-self: stretch; margin: var(--sp-1); min-width: 66px; }
 
 /* ── Category filters ────────────────────────────────────────── */
 .tags-filters {
@@ -89,22 +89,22 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: var(--s5);
-  padding-top: var(--s3);
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-3);
   border-top: 1px solid var(--line);
 }
-.tags-filter-label { margin-right: 2px; color: var(--fg-4); font-size: var(--fz-xs); }
+.tags-filter-label { margin-right: 2px; color: var(--fg-4); font-size: var(--fz-2xs); }
 .tag-filter {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 28px;
-  padding: var(--s1) 9px;
+  padding: var(--sp-1) 9px;
   color: var(--fg-4);
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 20px;
-  font-size: var(--fz-xs);
+  font-size: var(--fz-2xs);
   transition: color var(--t1) var(--e), background var(--t1) var(--e),
     border-color var(--t1) var(--e), transform var(--t1) var(--e);
 }
@@ -113,28 +113,28 @@
 .tag-filter:active { transform: scale(0.96); }
 .tag-filter[aria-pressed="true"] {
   color: var(--fg-2);
-  background: var(--c3);
+  background: var(--raised);
   border-color: var(--line-2);
 }
 .tag-filter[aria-pressed="true"] .tag-category-dot { filter: none; opacity: 1; }
 .tags-filter-sync {
   margin-left: auto;
   color: var(--fg-4);
-  font: 400 var(--fz-xs)/1.4 var(--mono);
+  font: 400 var(--fz-2xs)/1.4 var(--mono);
 }
 
 /* ── Results ─────────────────────────────────────────────────── */
-.tags-results { margin-top: var(--s8); min-height: 260px; }
+.tags-results { margin-top: var(--sp-6); min-height: 260px; }
 .tags-results-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s3);
+  gap: var(--sp-3);
   margin-bottom: 9px;
   color: var(--fg-4);
-  font-size: var(--fz-sm);
+  font-size: var(--fz-xs);
 }
-.tags-results-head span { font: 400 var(--fz-xs)/1.4 var(--mono); }
+.tags-results-head span { font: 400 var(--fz-2xs)/1.4 var(--mono); }
 .tags-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
 
 /* Whole card is the add target. It used to lift on hover while only the
@@ -147,13 +147,13 @@
   width: 100%;
   color: var(--fg-2);
   text-align: left;
-  background: color-mix(in srgb, var(--c2) 78%, transparent);
+  background: color-mix(in srgb, var(--chrome) 78%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--r2);
   transition: background var(--t1) var(--e), border-color var(--t1) var(--e),
     transform var(--t1) var(--e);
 }
-.tag-card:hover { background: var(--c2); border-color: var(--line-2); transform: translateY(-1px); }
+.tag-card:hover { background: var(--chrome); border-color: var(--line-2); transform: translateY(-1px); }
 .tag-card:has(.tag-add[aria-pressed="true"]) {
   border-color: var(--a-line);
   background: var(--a-dim);
@@ -162,11 +162,11 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s4);
+  gap: var(--sp-4);
   min-width: 0;
   width: 100%;
   height: 100%;
-  padding: 9px 6px 9px var(--s3);
+  padding: 9px 6px 9px var(--sp-3);
   color: inherit;
   text-align: left;
   border-radius: var(--r2);
@@ -186,17 +186,17 @@
 .tag-card-names { display: grid; gap: 3px; overflow: hidden; }
 .tag-card-names strong,
 .tag-card-names span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.tag-card-names strong { font: 500 var(--fz-md)/1.35 var(--mono); color: var(--fg); }
-.tag-card-names span { color: var(--fg-3); font-size: var(--fz-sm); }
+.tag-card-names strong { font: 500 var(--fz-sm)/1.35 var(--mono); color: var(--fg); }
+.tag-card-names span { color: var(--fg-3); font-size: var(--fz-xs); }
 .tag-card-meta {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: var(--fg-4);
-  font: 400 var(--fz-xs)/1.3 var(--mono);
+  font: 400 var(--fz-2xs)/1.3 var(--mono);
   white-space: nowrap;
 }
-.tag-card-actions { display: flex; align-items: center; gap: 2px; padding: var(--s1) 6px var(--s1) 0; }
+.tag-card-actions { display: flex; align-items: center; gap: 2px; padding: var(--sp-1) 6px var(--sp-1) 0; }
 /* Trailing cluster: centred tooltips would spill past the row's right edge,
    the same reason the topbar and stage tools right-align theirs. */
 .tag-card-actions [data-tip]::after { left: auto; right: 0; transform: translate(0, -3px); }
@@ -209,10 +209,10 @@
 .tag-card-actions .ibtn:focus-visible { opacity: 1; }
 
 .tags-empty {
-  padding: 48px var(--s4);
+  padding: 48px var(--sp-4);
   color: var(--fg-4);
   text-align: center;
-  background: var(--c1);
+  background: var(--sunken);
   border: 1px dashed var(--line);
   border-radius: var(--r3);
 }
@@ -221,23 +221,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--s3);
-  margin-top: var(--s4);
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
 }
 .tag-pagination[hidden] { display: none; }
 .tag-pagination > span {
   min-width: 48px;
   color: var(--fg-4);
-  font: 400 var(--fz-xs)/1.4 var(--mono);
+  font: 400 var(--fz-2xs)/1.4 var(--mono);
   text-align: center;
 }
 
 .tags-foot {
-  margin-top: var(--s8);
-  padding-top: var(--s3);
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-3);
   border-top: 1px solid var(--line);
   color: var(--fg-4);
-  font-size: var(--fz-xs);
+  font-size: var(--fz-2xs);
 }
 
 /* ── Prompt cart ─────────────────────────────────────────────── */
@@ -248,7 +248,7 @@
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   height: min(720px, calc(100dvh - 74px));
   min-height: 360px;
-  background: color-mix(in srgb, var(--c1) 96%, transparent);
+  background: color-mix(in srgb, var(--chrome) 96%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--r3);
   box-shadow: var(--sh-2), var(--sh-lip);
@@ -259,13 +259,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s3);
+  gap: var(--sp-3);
   min-height: 46px;
-  padding: 0 var(--s2) 0 var(--s3);
+  padding: 0 var(--sp-2) 0 var(--sp-3);
   border-bottom: 1px solid var(--line);
 }
-.tag-cart-head > div { display: flex; align-items: center; gap: var(--s2); }
-.tag-cart-head strong { font-size: var(--fz-md); font-weight: 600; }
+.tag-cart-head > div { display: flex; align-items: center; gap: var(--sp-2); }
+.tag-cart-head strong { font-size: var(--fz-sm); font-weight: 600; }
 .tag-cart-close { display: none; }
 
 .tag-cart-list {
@@ -278,26 +278,26 @@
 .tag-cart-item {
   display: grid;
   gap: 9px;
-  padding: 10px var(--s3);
+  padding: 10px var(--sp-3);
   border-bottom: 1px solid var(--line);
 }
 .tag-cart-item-names { display: grid; gap: 2px; overflow: hidden; }
 .tag-cart-item-names strong,
 .tag-cart-item-names span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.tag-cart-item-names strong { color: var(--fg-2); font: 500 var(--fz-sm)/1.35 var(--mono); }
-.tag-cart-item-names span { color: var(--fg-4); font-size: var(--fz-xs); }
+.tag-cart-item-names strong { color: var(--fg-2); font: 500 var(--fz-xs)/1.35 var(--mono); }
+.tag-cart-item-names span { color: var(--fg-4); font-size: var(--fz-2xs); }
 
-.tag-weight { display: flex; align-items: center; gap: var(--s1); }
-.tag-weight > span { margin-right: auto; color: var(--fg-4); font-size: var(--fz-xs); }
+.tag-weight { display: flex; align-items: center; gap: var(--sp-1); }
+.tag-weight > span { margin-right: auto; color: var(--fg-4); font-size: var(--fz-2xs); }
 .tag-weight input[type="number"] {
   width: 46px;
   height: 27px;
-  padding: 3px var(--s1);
+  padding: 3px var(--sp-1);
   text-align: center;
   color: var(--fg-2);
-  background: var(--c0);
+  background: var(--sunken);
   border-radius: var(--r1);
-  font-size: var(--fz-xs);
+  font-size: var(--fz-2xs);
 }
 .tag-weight input[type="number"]::-webkit-inner-spin-button { display: none; }
 .tag-cart-remove:hover { color: var(--err); background: var(--err-dim); }
@@ -305,25 +305,25 @@
 .tag-cart-empty {
   grid-row: 2;
   align-self: center;
-  padding: var(--s5);
+  padding: var(--sp-5);
   color: var(--fg-4);
   text-align: center;
-  font-size: var(--fz-sm);
+  font-size: var(--fz-xs);
 }
 .tag-cart-empty[hidden] { display: none; }
 
 .tag-cart-preview {
   grid-row: 3;
-  padding: 9px var(--s3);
+  padding: 9px var(--sp-3);
   border-top: 1px solid var(--line);
-  background: var(--c0);
+  background: var(--sunken);
 }
 .tag-cart-preview[hidden] { display: none; }
 .tag-cart-preview > span {
   display: block;
-  margin-bottom: var(--s1);
+  margin-bottom: var(--sp-1);
   color: var(--fg-4);
-  font-size: var(--fz-xs);
+  font-size: var(--fz-2xs);
 }
 .tag-cart-preview code {
   display: -webkit-box;
@@ -332,17 +332,17 @@
   max-height: 56px;
   overflow: hidden;
   color: var(--fg-3);
-  font: 400 var(--fz-xs)/1.45 var(--mono);
+  font: 400 var(--fz-2xs)/1.45 var(--mono);
   overflow-wrap: anywhere;
 }
 .tag-cart-foot {
   grid-row: 4;
   display: grid;
-  gap: var(--s2);
+  gap: var(--sp-2);
   padding: 9px;
   border-top: 1px solid var(--line);
 }
-.tag-cart-foot-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.tag-cart-foot-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 .tag-cart-apply .ico { width: 13px; height: 13px; }
 
 .tag-cart-fab,
@@ -356,29 +356,29 @@
 /* ── Mobile: cart becomes a bottom sheet ─────────────────────── */
 @media (max-width: 860px) {
   .tags-main {
-    width: calc(100% - var(--s6));
+    width: calc(100% - var(--sp-5));
     display: block;
-    padding-top: var(--s8);
+    padding-top: var(--sp-6);
   }
   .tags-hero h1 { font-size: 26px; }
-  .tags-search { margin-top: var(--s5); }
+  .tags-search { margin-top: var(--sp-5); }
   .tags-search .btn { min-width: 58px; }
   .tags-filter-sync { width: 100%; margin: 1px 0 0; }
-  .tags-results { margin-top: var(--s6); }
-  .tag-card-info { gap: var(--s2); padding-left: 10px; }
+  .tags-results { margin-top: var(--sp-5); }
+  .tag-card-info { gap: var(--sp-2); padding-left: 10px; }
   .tag-card-actions { gap: 0; padding-right: 2px; }
   .tags-foot { line-height: 1.6; }
 
   .tag-cart {
     position: fixed;
     z-index: var(--z-modal);
-    inset: auto var(--s2) var(--s2);
+    inset: auto var(--sp-2) var(--sp-2);
     height: min(72dvh, 620px);
     min-height: 320px;
     padding-bottom: env(safe-area-inset-bottom);
     visibility: hidden;
     opacity: 0;
-    transform: translateY(calc(100% + var(--s5)));
+    transform: translateY(calc(100% + var(--sp-5)));
     transition: transform var(--t3) var(--e-out), opacity var(--t2) var(--e),
       visibility 0s var(--t3);
   }
@@ -417,14 +417,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--s2);
+    gap: var(--sp-2);
     position: fixed;
-    right: var(--s4);
-    bottom: calc(var(--s4) + env(safe-area-inset-bottom));
+    right: var(--sp-4);
+    bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
     z-index: var(--z-sticky);
     min-width: 46px;
     height: 46px;
-    padding: 0 var(--s3);
+    padding: 0 var(--sp-3);
     color: var(--a-ink);
     background: var(--a);
     border-radius: 20px;
@@ -433,7 +433,7 @@
   }
   .tag-cart-fab:active { transform: scale(0.96); }
   .tag-cart-fab .ico { width: 16px; height: 16px; }
-  .tag-cart-fab span { font: 600 var(--fz-xs)/1 var(--mono); }
+  .tag-cart-fab span { font: 600 var(--fz-2xs)/1 var(--mono); }
   /* Clear the floating cart button so toasts stay legible. */
   .toasts { bottom: calc(72px + env(safe-area-inset-bottom)); }
 }
@@ -452,5 +452,5 @@
    would be invisible and unreachable on touch. */
 @media (hover: none) {
   .tag-card-actions .ibtn { opacity: 1; }
-  .tag-card:hover { transform: none; background: color-mix(in srgb, var(--c2) 78%, transparent); border-color: var(--line); }
+  .tag-card:hover { transform: none; background: color-mix(in srgb, var(--chrome) 78%, transparent); border-color: var(--line); }
 }
