@@ -541,6 +541,13 @@ function renderGallery() {
      back to an earlier result during a batch left no sign that anything was
      still running — the rail looked idle and the new image arrived from
      nowhere. It leads the list because history is newest-first. */
+  /* Exactly one thing in the rail is "current". Both the placeholder and the
+     thumbnails used to decide this independently — the slot from `!browsing`,
+     each tile from `current.id` — so mid-batch BOTH lit up: the job was live
+     (slot current) while the previous image was still on stage (tile current).
+     One decision, made once, drives both. */
+  const liveIsCurrent = !!pendingShape && !browsing;
+
   if (pendingShape) {
     /* Clickable: after browsing an earlier result this is the way back to the
        running job. It is a button because it now does something. */
@@ -548,11 +555,10 @@ function renderGallery() {
     slot.type = "button";
     slot.className = "tile tile-pending";
     slot.setAttribute("aria-live", "polite");
-    slot.setAttribute("aria-current", String(!browsing));
+    slot.setAttribute("aria-current", String(liveIsCurrent));
     const label = browsing ? `${pendingLabel()}（点击返回）` : pendingLabel();
     slot.setAttribute("aria-label", label);
     slot.dataset.tip = label;
-    slot.style.aspectRatio = `${pendingShape.width} / ${pendingShape.height}`;
     const glow = document.createElement("div");
     glow.className = "shimmer";
     slot.append(glow);
@@ -566,7 +572,8 @@ function renderGallery() {
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "tile";
-    tile.setAttribute("aria-current", String(current?.id === item.id));
+    // Yields to the live slot: while a job owns the view, no thumbnail is current.
+    tile.setAttribute("aria-current", String(!liveIsCurrent && current?.id === item.id));
     const when = new Date(item.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
     tile.title = `${when}\n${item.params?.prompt?.slice(0, 140) || ""}`;
 
@@ -580,10 +587,8 @@ function renderGallery() {
     })();
     img.alt = "";
     img.decoding = "async";
-    // reserve the right box before decode so the rail does not jump
-    if (item.size?.width && item.size?.height) {
-      tile.style.aspectRatio = `${item.size.width} / ${item.size.height}`;
-    }
+    /* No inline aspect-ratio: the rail is a uniform square grid now, so the box
+       is already reserved by CSS and cannot jump on decode. */
     tile.append(img);
 
     const x = document.createElement("span");

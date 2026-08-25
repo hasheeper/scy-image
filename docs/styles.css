@@ -25,7 +25,11 @@
        VS Code  +3.45    Notion  +3.49
        Linear   +5.15    Figma   +6.74
 
-     This ramp holds ΔL* ≈ +4 per step, inside that band. The original
+     A later pass tightened it further: +4 still read as too much separation
+     for a tool whose entire job is looking at pictures. Image generators sit at
+     the quiet end of that band — NovelAI is barely a shade — because every step
+     in the chrome competes with the artwork. canvas→chrome is +2.5 now and the
+     panels are still unmistakably panels. The original
      problem still had to be fixed: topbar, composer, stage, viewport
      and gallery all painted the same colour, so the five main regions
      had zero separation and the app read as controls scattered on one
@@ -34,14 +38,19 @@
      Absolute level stays close to the original near-black, because the
      point of this UI is that the picture is the bright object. White
      on --canvas is still 19.3:1. */
-  --canvas: #0e0e10;   /* viewport — the mat a print sits on */
-  --sunken: #141417;   /* inputs, wells, thumbnails */
+  --canvas: #131315;   /* viewport — the mat a print sits on */
+  --sunken: #131316;   /* inputs, wells, thumbnails */
   --chrome: #18181c;   /* topbar, composer, stage head, gallery */
-  --raised: #202026;   /* cards, drawers, sheets, tooltips */
-  --hover:  #282830;   /* pointer feedback on raised things */
+  --raised: #1e1e24;   /* cards, drawers, sheets, tooltips */
+  --hover:  #24242c;   /* pointer feedback on raised things */
 
-  --line: #222228;     /* ΔL* +5 over chrome */
-  --line-2: #2a2a33;   /* ΔL* +9 — emphasis dividers, focus wells */
+  /* Focus deepens the well by one notch. This was a hardcoded #0c0c0f that
+     survived two retunes of the ramp and had drifted to L*=3.4 — darker than
+     the canvas the image sits on. */
+  --sunken-focus: #101013;
+
+  --line: #1f1f25;     /* ΔL* +3.6 over chrome */
+  --line-2: #25252e;   /* ΔL* +6.6 — emphasis dividers, focus wells */
 
   /* Contrast ratio IS the right metric here — it is what WCAG models.
      Anchored against --raised, the lightest surface any of these can
@@ -49,10 +58,10 @@
      value tuned for the panel silently fails one level up. Measuring
      rendered pixels caught exactly that — .chip came out at 2.79 while
      the arithmetic said 3.20, because .chip sits on --raised. */
-  --fg: #eaeaed;
-  --fg-2: #aaaab0;   /* 7.01 on raised */
-  --fg-3: #88888f;   /* 4.60 on raised — AA */
-  --fg-4: #6c6c73;   /* 3.11 on raised — decorative/large only */
+  --fg: #e8e8eb;
+  --fg-2: #a8a8ae;   /* 7.01 on raised */
+  --fg-3: #86868d;   /* 4.59 on raised — AA */
+  --fg-4: #6a6a71;   /* 3.09 on raised — decorative/large only */
 
   --a: #b3a1ff;
   --a-ink: #17132a;
@@ -193,7 +202,7 @@ input:hover:not(:focus), textarea:hover:not(:focus), select:hover:not(:focus) { 
 input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--a-line);
-  background: #0c0c0f;
+  background: var(--sunken-focus);
   box-shadow: var(--ring);
 }
 ::placeholder { color: var(--fg-4); }
@@ -371,7 +380,7 @@ select option { background: var(--raised); }
 .hl-wrap:hover { border-color: var(--line-2); }
 .hl-wrap:focus-within {
   border-color: var(--a-line);
-  background: #0c0c0f;
+  background: var(--sunken-focus);
   box-shadow: 0 0 0 3px var(--a-dim);
 }
 
@@ -477,7 +486,23 @@ select option { background: var(--raised); }
 .ibtn:hover { color: var(--fg); background: var(--raised); }
 .ibtn:active { transform: scale(.94); }
 .ibtn[hidden] { display: none; }
-.ibtn-xs { width: 26px; height: 26px; --ico: 14px; }
+.ibtn-xs { width: 28px; height: 28px; --ico: 17px; }
+/* The prompt block's two actions carry real weight now that the labels are
+   gone: bigger glyph, brighter idle colour, and a visible resting surface so
+   they read as buttons rather than as ornament. */
+.fld-actions .ibtn {
+  width: 30px; height: 30px;
+  --ico: 19px;
+  color: var(--fg-2);
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.fld-actions .ibtn:hover {
+  color: var(--fg);
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.fld-actions .ibtn .ico { stroke-width: 1.9; }
 .ibtn-accent { color: var(--a); }
 .ibtn-accent:hover { color: var(--a); background: var(--a-dim); }
 /* Settled state after a successful clean — reverts on the next edit. */
@@ -1110,6 +1135,11 @@ body[data-hist="off"] .gallery { border-left-color: transparent; }
 .tile {
   position: relative; flex: none;
   width: 100%;
+  /* A uniform square grid. Letting each tile take the aspect of its image made
+     a portrait thumbnail nearly three times the height of a landscape one, so
+     the rail scanned as randomly sized blocks and the eye had no column to
+     follow. The shape of a result is already legible from the crop. */
+  aspect-ratio: 1 / 1;
   border-radius: var(--r1);
   overflow: hidden;
   background: var(--sunken);
@@ -1119,8 +1149,9 @@ body[data-hist="off"] .gallery { border-left-color: transparent; }
   content-visibility: auto;
   contain-intrinsic-size: auto 140px;
 }
-/* aspect preserved — no cover-cropping the composition away */
-.tile img { display: block; width: 100%; height: auto; }
+/* Fills the square from the centre. The full composition stays one click away
+   in the stage and the lightbox. */
+.tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tile:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--line-2), 0 6px 14px -4px rgba(0,0,0,.6); }
 .tile[aria-current="true"] { box-shadow: 0 0 0 1.5px var(--a); }
 
@@ -1132,7 +1163,6 @@ body[data-hist="off"] .gallery { border-left-color: transparent; }
     linear-gradient(170deg, rgba(255, 255, 255, 0.026), transparent 62%),
     var(--sunken);
   box-shadow: 0 0 0 1px var(--a-line);
-  /* aspect-ratio is set inline from the frozen request shape */
   content-visibility: visible;   /* never skip paint: it is the active element */
 }
 /* Currently on screen: matches how a selected thumbnail reads. */
@@ -1478,8 +1508,8 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     overflow-x: auto; overflow-y: hidden;
     scroll-snap-type: x proximity;
   }
-  .tile { width: auto; height: 54px; scroll-snap-align: start; }
-  .tile img { width: auto; height: 100%; }
+  /* Horizontal rail on touch: a fixed square keeps the strip on one rhythm. */
+  .tile { width: 54px; height: 54px; scroll-snap-align: start; }
   .tray-empty { flex: 1 1 auto; padding: 0; text-align: left; }
 
   /* composer scrolls with the document; no nested scrollport on touch */
