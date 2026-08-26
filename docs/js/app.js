@@ -1405,6 +1405,7 @@ $("histToggle").addEventListener("click", () => {
   const on = body.dataset.hist !== "off";
   body.dataset.hist = on ? "off" : "on";
   $("histToggle").setAttribute("aria-pressed", String(!on));
+  $("histToggle").setAttribute("aria-expanded", String(!on));
   $("histToggle").dataset.tip = on ? "显示历史" : "隐藏历史";
   prefs.save({ histOpen: !on });
   setTimeout(measureFit, 400);
@@ -1921,6 +1922,7 @@ async function boot() {
   if (saved.rail) document.documentElement.style.setProperty("--rail", `${saved.rail}px`);
   body.dataset.hist = saved.histOpen === false ? "off" : "on";
   $("histToggle").setAttribute("aria-pressed", String(saved.histOpen !== false));
+  $("histToggle").setAttribute("aria-expanded", String(saved.histOpen !== false));
   $("histToggle").dataset.tip = saved.histOpen === false ? "显示历史" : "隐藏历史";
   customMode = !RATIOS.some(
     (r) => !r.custom && r.w === Number($("width").value) && r.h === Number($("height").value)
