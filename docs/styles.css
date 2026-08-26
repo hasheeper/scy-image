@@ -890,6 +890,7 @@ body[data-gate="open"] .gate-card { transform: none; }
 .meters {
   display: flex;
   align-items: stretch;
+  margin-left: 4px;
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
