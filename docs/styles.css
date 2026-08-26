@@ -989,6 +989,24 @@ body[data-drag="on"] .viewport { pointer-events: none; }
   gap: var(--sp-4);
 }
 .composer-scroll > * { flex: none; }
+.composer-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg-2);
+  font-size: var(--fz-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.01em;
+}
+.section-ico {
+  width: 16px;
+  height: 16px;
+  color: var(--fg-3);
+  fill: currentColor;
+  stroke: none;
+  transition: color var(--t1) var(--e), transform var(--t2) var(--e-out);
+}
+.composer-heading .section-ico { color: var(--a); }
 .composer-foot {
   padding: var(--sp-3) var(--sp-4) var(--sp-4);
   display: grid; gap: 6px;
@@ -1032,13 +1050,21 @@ body[data-drag="on"] .viewport { pointer-events: none; }
 .drawer { border: 1px solid var(--line); border-radius: var(--r3); background: var(--raised); overflow: hidden; }
 .drawer summary {
   display: flex; align-items: center; gap: var(--sp-2);
-  padding: 9px var(--sp-3);
+  min-height: 40px;
+  padding: 8px var(--sp-3);
   font-size: var(--fz-xs); font-weight: var(--fw-medium); color: var(--fg-2);
   cursor: pointer; list-style: none;
-  transition: background var(--t1) var(--e);
+  transition: background var(--t1) var(--e), color var(--t1) var(--e), box-shadow var(--t1) var(--e);
 }
 .drawer summary::-webkit-details-marker { display: none; }
 .drawer summary:hover { background: var(--hover); color: var(--fg); }
+.drawer summary:hover .section-ico { color: var(--fg-2); transform: scale(1.04); }
+.drawer[open] > summary {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--hover) 56%, transparent);
+  box-shadow: inset 0 -1px var(--line);
+}
+.drawer[open] > summary .section-ico { color: var(--a); }
 .caret {
   margin-left: auto; width: 7px; height: 7px; flex: none;
   border-right: 1.4px solid var(--fg-3); border-bottom: 1.4px solid var(--fg-3);
