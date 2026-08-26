@@ -1670,6 +1670,9 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     flex-direction: column;
     align-items: stretch;
     gap: var(--sp-1);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: color-mix(in srgb, var(--raised) 97%, transparent);
     border-left: 1px solid var(--line-2);
     box-shadow: var(--sh-4);
@@ -1699,6 +1702,18 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     transform: none; visibility: visible; transition-delay: 0s;
   }
 
+  .topbar-history-slot {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    margin-top: var(--sp-2);
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--line);
+    overflow: hidden;
+  }
+  body[data-hist="off"] .topbar-history-slot { display: none; }
+
   /* dvh avoids the iOS/Android URL-bar height jump */
   .shell {
     grid-template-columns: 1fr;
@@ -1716,29 +1731,54 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   }
   .stage-tools { top: var(--sp-2); right: var(--sp-2); }
 
-  /* history becomes a horizontal filmstrip under the image */
-  .gallery {
-    order: 2;
-    display: flex; flex-direction: row; align-items: center;
-    gap: var(--sp-2);
-    border-left: 0; border-top: 1px solid var(--line);
-    padding: var(--sp-2) var(--sp-3);
+  /* History lives below the tools inside the manually opened side rail. */
+  .topbar-history-slot .gallery {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
     min-height: 0;
+    border: 0;
+    background: transparent;
+    overflow: hidden;
   }
   body[data-hist="off"] .gallery { display: none; }
-  .gallery-head {
-    height: auto; flex: none; padding: 0;
-    border-bottom: 0; flex-direction: column; gap: 2px;
+  .topbar-history-slot .gallery-head {
+    height: 36px;
+    flex: none;
+    padding: 0 2px 0 var(--sp-1);
+    border-bottom: 1px solid var(--line);
+    flex-direction: row;
+    gap: var(--sp-2);
   }
-  .tray {
-    flex: 1 1 auto; flex-direction: row;
-    padding: 0; gap: var(--sp-2);
-    overflow-x: auto; overflow-y: hidden;
-    scroll-snap-type: x proximity;
+  .topbar-history-slot .gallery-head .ibtn {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    justify-content: center;
+    padding: 0;
   }
-  /* Horizontal rail on touch: a fixed square keeps the strip on one rhythm. */
-  .tile { width: 54px; height: 54px; scroll-snap-align: start; }
-  .tray-empty { flex: 1 1 auto; padding: 0; text-align: left; }
+  .topbar-history-slot .tray {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    padding: var(--sp-2) 2px;
+    gap: var(--sp-2);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .topbar-history-slot .tray:empty { display: none; }
+  .topbar-history-slot .tile {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+  }
+  .topbar-history-slot .tray-empty {
+    flex: none;
+    padding: var(--sp-4) var(--sp-2);
+    text-align: center;
+  }
 
   /* composer scrolls with the document; no nested scrollport on touch */
   .composer {

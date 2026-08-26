@@ -1424,12 +1424,24 @@ $("topbarMenuToggle").addEventListener("click", () => {
 });
 $("topbarMenuBackdrop").addEventListener("click", () => setTopbarMenu(false));
 $("topbarActions").addEventListener("click", (event) => {
-  if (event.target.closest("button")) setTopbarMenu(false);
+  if (event.target.closest("[data-topbar-action]")) setTopbarMenu(false);
 });
 const mobileHeader = matchMedia("(max-width: 860px)");
+
+/* On phones history belongs to the manually opened utility rail, not beneath
+   the image. Move the real node so its state, listeners and object URLs remain
+   singular; desktop restores it as the shell's final grid column. */
+function placeGallery() {
+  const gallery = $("gallery");
+  const host = mobileHeader.matches ? $("topbarHistorySlot") : document.querySelector(".shell");
+  if (gallery.parentElement !== host) host.append(gallery);
+}
+
 mobileHeader.addEventListener?.("change", (event) => {
+  placeGallery();
   if (!event.matches) setTopbarMenu(false);
 });
+placeGallery();
 
 /* lightbox */
 function openZoom() {

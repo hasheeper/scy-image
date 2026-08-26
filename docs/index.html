@@ -157,18 +157,19 @@
         </button>
         <button class="topbar-menu-backdrop" id="topbarMenuBackdrop" type="button" aria-label="关闭工具栏"></button>
         <div class="topbar-end" id="topbarActions" role="group" aria-label="工具">
-          <button class="ibtn" id="importBtn" type="button" data-tip="导入参数" aria-label="从图片导入参数">
+          <button class="ibtn" id="importBtn" type="button" data-topbar-action data-tip="导入参数" aria-label="从图片导入参数">
             <svg class="ico"><use href="#i-import" /></svg><span class="topbar-action-label">导入参数</span>
           </button>
-          <button class="ibtn" type="button" data-open-picker data-tip="查词插入" aria-label="查词插入">
+          <button class="ibtn" type="button" data-topbar-action data-open-picker data-tip="查词插入" aria-label="查词插入">
             <svg class="ico"><use href="#i-search" /></svg><span class="topbar-action-label">查词插入</span>
           </button>
-          <button class="ibtn" id="histToggle" type="button" aria-pressed="true" data-tip="历史" aria-label="历史">
+          <button class="ibtn" id="histToggle" type="button" data-topbar-action aria-pressed="true" data-tip="历史" aria-label="历史">
             <svg class="ico"><use href="#i-layers" /></svg><span class="topbar-action-label">历史记录</span>
           </button>
-          <button class="ibtn" id="lockButton" type="button" data-tip="锁定" aria-label="锁定">
+          <button class="ibtn" id="lockButton" type="button" data-topbar-action data-tip="锁定" aria-label="锁定">
             <svg class="ico"><use href="#i-lock" /></svg><span class="topbar-action-label">锁定</span>
           </button>
+          <div class="topbar-history-slot" id="topbarHistorySlot"></div>
         </div>
       </div>
     </header>
