@@ -440,8 +440,6 @@ function paintMeter(node, leftEl, totalEl, fillEl, left, total) {
 
 function syncMeters() {
   const policy = quotaPolicy(quotaStatus);
-  paintMeter($("meterImages"), $("imgLeft"), $("imgTotal"), $("imgFill"),
-    policy.imageRemaining, policy.imageLimit);
   paintMeter($("meterPoints"), $("ptLeft"), $("ptTotal"), $("ptFill"),
     policy.unitsRemaining, policy.unitsLimit);
 
@@ -449,7 +447,6 @@ function syncMeters() {
   const when = Number.isFinite(reset) && reset > 0
     ? `，约 ${reset >= 3600 ? `${Math.round(reset / 3600)} 小时` : `${Math.max(1, Math.round(reset / 60))} 分钟`}后重置`
     : "";
-  $("meterImages").dataset.tip = `今日图片额度 剩 ${meterNumber(policy.imageRemaining)}/${meterNumber(policy.imageLimit)}${when}`;
   $("meterPoints").dataset.tip = `今日点数 剩 ${meterNumber(policy.unitsRemaining)}/${meterNumber(policy.unitsLimit)}${when}`;
   $("meters").dataset.loading = quotaLoading ? "1" : "0";
 }

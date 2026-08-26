@@ -31,6 +31,9 @@
         <symbol id="i-sparkle" viewBox="0 0 24 24">
           <path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" />
         </symbol>
+        <symbol id="i-points" viewBox="0 0 256 256">
+          <path d="M230.86,109.25,169.18,86.82,146.75,25.14a19.95,19.95,0,0,0-37.5,0L86.82,86.82,25.14,109.25a19.95,19.95,0,0,0,0,37.5l61.68,22.43,22.43,61.68a19.95,19.95,0,0,0,37.5,0l22.43-61.68,61.68-22.43a19.95,19.95,0,0,0,0-37.5Zm-75.14,39.29a12,12,0,0,0-7.18,7.18L128,212.21l-20.54-56.49a12,12,0,0,0-7.18-7.18L43.79,128l56.49-20.54a12,12,0,0,0,7.18-7.18L128,43.79l20.54,56.49a12,12,0,0,0,7.18,7.18L212.21,128Z" />
+        </symbol>
         <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" /></symbol>
         <symbol id="i-download" viewBox="0 0 24 24">
           <path d="M12 4v11m0 0 4-4m-4 4-4-4" /><path d="M4.5 18.5h15" />
@@ -133,16 +136,11 @@
         <span>Scylla <b>Image</b></span>
       </div>
 
-      <!-- Instrument cluster. Two independent budgets, both day-scoped: the
-           image quota and the unit cost the upstream actually bills. Reads as a
-           gauge, not as chat: label above, monospace figure below. -->
+      <!-- The billed point balance stays visible; image quota remains internal
+           for batch safety and warning policy. -->
       <div class="meters" id="meters" aria-live="polite">
-        <div class="meter" id="meterImages" data-tip="今日图片额度">
-          <span class="meter-k">IMAGES</span>
-          <span class="meter-v"><b id="imgLeft">—</b><i id="imgTotal"></i></span>
-          <span class="meter-bar"><i id="imgFill"></i></span>
-        </div>
         <div class="meter" id="meterPoints" data-tip="今日点数额度">
+          <svg class="ico meter-icon" aria-hidden="true"><use href="#i-points" /></svg>
           <span class="meter-k">POINTS</span>
           <span class="meter-v"><b id="ptLeft">—</b><i id="ptTotal"></i></span>
           <span class="meter-bar"><i id="ptFill"></i></span>
