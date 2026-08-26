@@ -336,17 +336,6 @@
         </div>
 
         <div class="viewport" id="viewport">
-          <div class="stage-tools">
-            <button class="ibtn" id="copyBtn" type="button" hidden data-tip="复制描述" aria-label="复制描述">
-              <svg class="ico"><use href="#i-copy" /></svg>
-            </button>
-            <button class="ibtn" id="reuseBtn" type="button" hidden data-tip="复用参数" aria-label="复用参数">
-              <svg class="ico"><use href="#i-reuse" /></svg>
-            </button>
-            <button class="ibtn ibtn-accent" id="saveBtn" type="button" hidden data-tip="下载" aria-label="下载">
-              <svg class="ico"><use href="#i-download" /></svg>
-            </button>
-          </div>
           <div class="layer center" data-layer="empty">
             <div class="blank">
               <svg class="ico ico-xl"><use href="#i-image" /></svg>
@@ -377,10 +366,43 @@
           <div class="layer center" data-layer="image">
             <figure class="print" id="print">
               <img id="image" alt="生成结果" decoding="async">
-              <figcaption class="print-meta mono" id="printMeta"></figcaption>
             </figure>
           </div>
         </div>
+
+        <footer class="result-panel" id="resultPanel" aria-label="图片信息">
+          <div class="result-copy">
+            <div class="result-name-row">
+              <strong class="result-name" id="resultName"></strong>
+            </div>
+            <span class="result-model" id="resultModel"></span>
+            <div class="result-tags">
+              <span>TAG</span>
+              <p class="mono" id="resultTags"></p>
+            </div>
+          </div>
+          <div class="result-bottom">
+            <div class="result-params mono" role="list" aria-label="生成参数">
+              <span class="result-param" id="resultSeed" role="listitem"></span>
+              <span class="result-param" id="resultSize" role="listitem"></span>
+              <span class="result-param" id="resultSteps" role="listitem"></span>
+              <span class="result-param" id="resultScale" role="listitem"></span>
+              <span class="result-param" id="resultCfg" role="listitem"></span>
+              <span class="result-param" id="resultSampler" role="listitem"></span>
+            </div>
+            <div class="result-actions" role="group" aria-label="图片操作">
+              <button class="ibtn" id="reuseBtn" type="button" hidden data-tip="复用参数" aria-label="复用参数">
+                <svg class="ico"><use href="#i-reuse" /></svg>
+              </button>
+              <button class="ibtn" id="copyBtn" type="button" hidden data-tip="复制 Tag" aria-label="复制 Tag">
+                <svg class="ico"><use href="#i-copy" /></svg>
+              </button>
+              <button class="ibtn ibtn-accent" id="saveBtn" type="button" hidden data-tip="下载" aria-label="下载">
+                <svg class="ico"><use href="#i-download" /></svg>
+              </button>
+            </div>
+          </div>
+        </footer>
       </section>
 
       <!-- ── History rail ───────────────────────────────────── -->

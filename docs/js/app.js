@@ -690,6 +690,50 @@ function renderGallery() {
 
 /* `viaUser` distinguishes a click on a thumbnail from the job presenting its
    own fresh result. Only the former should pin the view. */
+function imageFileName(entry) {
+  const params = entry?.params || {};
+  const ext = entry?.blob?.type?.includes("jpeg") ? "jpg" : "png";
+  const model = String(params.model || "scy-image").replace(/[^a-zA-Z0-9._-]+/g, "-");
+  const suffix = params.isComparison
+    ? `batch-${params.comparisonTotal || params.batchTotal || 1}`
+    : String(params.seed ?? entry?.id ?? "result").replace(/[^a-zA-Z0-9._-]+/g, "-");
+  return `${model}-${suffix}.${ext}`;
+}
+
+function setResultParam(id, value) {
+  const el = $(id);
+  el.hidden = value == null || value === "";
+  el.textContent = el.hidden ? "" : String(value);
+}
+
+function renderResultInfo(item) {
+  const params = item.params || {};
+  const knownModel = catalog.models.find((model) => model.id === params.model)?.name;
+  const tags = params.prompt || "无 Tag";
+
+  $("resultName").textContent = imageFileName(item);
+  $("resultName").title = imageFileName(item);
+  $("resultModel").textContent = knownModel || params.modelName || params.model || "未知模型";
+  $("resultTags").textContent = tags;
+  $("resultTags").title = tags;
+
+  const seed = params.isComparison
+    ? (params.seedStart != null ? `# ${params.seedStart}+` : "# 多 Seed")
+    : (params.seed != null ? `# ${params.seed}` : "");
+  const width = params.width || item.size?.width;
+  const height = params.height || item.size?.height;
+  const sampler = params.sampler
+    ? String(params.sampler).replace(/^k_/, "").replaceAll("_", " ")
+    : "";
+
+  setResultParam("resultSeed", seed);
+  setResultParam("resultSize", width && height ? `${width}×${height}` : "");
+  setResultParam("resultSteps", params.steps != null ? `${params.steps} steps` : "");
+  setResultParam("resultScale", params.scale != null ? `Scale ${params.scale}` : "");
+  setResultParam("resultCfg", params.cfg != null ? `CFG ${params.cfg}` : "");
+  setResultParam("resultSampler", sampler);
+}
+
 function showEntry(item, { viaUser = false } = {}) {
   if (viaUser && pendingShape) browsing = true;
   else if (!viaUser) browsing = false;
@@ -707,13 +751,7 @@ function showEntry(item, { viaUser = false } = {}) {
     Number.isFinite(item.ms) ? `${(item.ms / 1000).toFixed(1)}s` : ""
   ].filter(Boolean);
   $("stageSub").textContent = bits.join("  ·  ");
-  // Keep the image chrome short; full parameters remain available via reuse.
-  $("printMeta").textContent = [
-    item.params?.sampler,
-    `${item.params?.steps} steps`,
-    `cfg ${item.params?.cfg}`,
-    `scale ${item.params?.scale}`
-  ].filter(Boolean).join(" · ");
+  renderResultInfo(item);
 
   // Bypass setState: browsing is exactly the case that must override "busy".
   body.dataset.state = "done";
@@ -1281,12 +1319,9 @@ $("resetAdv").addEventListener("click", () => {
 
 $("saveBtn").addEventListener("click", () => {
   if (!current) return;
-  const ext = current.blob.type.includes("jpeg") ? "jpg" : "png";
   const a = document.createElement("a");
   a.href = current.url;
-  a.download = current.params.isComparison
-    ? `${current.params.model}-batch-${current.params.comparisonTotal}.${ext}`
-    : `${current.params.model}-${current.params.seed}.${ext}`;
+  a.download = imageFileName(current);
   a.click();
 });
 
@@ -1294,7 +1329,7 @@ $("copyBtn").addEventListener("click", async () => {
   if (!current?.params?.prompt) return;
   try {
     await navigator.clipboard.writeText(current.params.prompt);
-    toast("描述已复制", "ok");
+    toast("Tag 已复制", "ok");
   } catch {
     toast("浏览器拒绝了剪贴板访问");
   }

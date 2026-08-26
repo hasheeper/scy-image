@@ -569,12 +569,12 @@ select option { background: var(--raised); }
   z-index: var(--z-tip);
 }
 [data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 260ms; }
-.stage-tools [data-tip]::after,
+.result-actions [data-tip]::after,
 .tray [data-tip]::after,
 .fld-actions [data-tip]::after,
 .topbar-end [data-tip]::after { left: auto; right: 0; transform: translate(0, -3px); }
 .fld-actions [data-tip]:hover::after,
-.stage-tools [data-tip]:hover::after,
+.result-actions [data-tip]:hover::after,
 .tray [data-tip]:hover::after,
 .topbar-end [data-tip]:hover::after { transform: translate(0, 0); }
 
@@ -1050,7 +1050,14 @@ body[data-drag="on"] .viewport { pointer-events: none; }
 .seed { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-2); }
 
 /* ── Stage ───────────────────────────────────────────────────── */
-.stage { position: relative; display: grid; min-width: 0; background: var(--chrome); }
+.stage {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--chrome);
+}
 
 /* Generation state remains available to screen readers while visible status
    stays in the busy/error layers instead of consuming a permanent toolbar. */
@@ -1062,21 +1069,6 @@ body[data-drag="on"] .viewport { pointer-events: none; }
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.stage-tools {
-  position: absolute;
-  top: var(--sp-3); right: var(--sp-3);
-  z-index: 6;
-  display: flex; gap: 3px;
-}
-.stage-tools .ibtn {
-  --ico: 17px;
-  color: var(--fg-2);
-  background: color-mix(in srgb, var(--canvas) 76%, transparent);
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(8px);
-}
-.stage-tools .ibtn:hover { color: var(--fg); background: color-mix(in srgb, var(--raised) 86%, transparent); }
-
 /* The mat. Slight vignette gives depth without drawing attention. */
 .viewport {
   position: relative;
@@ -1161,23 +1153,90 @@ body[data-state="done"] .layer[data-layer="image"] {
 /* Fit-only: the image always scales down to the stage. Clicking opens the
    lightbox for a closer look, which replaces the old 1:1 toggle. */
 
-/* metadata rides on the print, only on hover */
-/* Single line, clipped rather than wrapped: the gradient behind it is sized
-   for one line, so wrapping pushed text out of the scrim and onto the image. */
-.print-meta {
-  position: absolute; left: 0; right: 0; bottom: 0;
-  padding: 20px var(--sp-3) 8px;
-  color: rgba(255,255,255,0.78);
-  background: linear-gradient(to top, rgba(0,0,0,0.74), transparent);
-  white-space: nowrap;
+/* Result information sits below the image instead of obscuring it. */
+.result-panel {
+  display: none;
+  gap: var(--sp-2);
+  padding: 10px var(--sp-3) var(--sp-3);
+  min-width: 0;
+  color: var(--fg-2);
+  background: color-mix(in srgb, var(--canvas) 78%, var(--chrome));
+  border-top: 1px solid var(--line);
+}
+body[data-state="done"] .result-panel { display: grid; }
+
+.result-copy { display: grid; gap: 3px; min-width: 0; }
+.result-name-row { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.result-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: opacity var(--t2) var(--e), transform var(--t2) var(--e);
-  pointer-events: none;
+  white-space: nowrap;
+  font: var(--fw-semibold) var(--fz-sm)/1.35 var(--sans);
+  color: var(--fg);
 }
-.print:hover .print-meta { opacity: 1; transform: none; }
+.result-model { font-size: var(--fz-2xs); color: var(--fg-3); }
+.result-tags { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 2px; }
+.result-tags > span {
+  flex: none;
+  padding: 1px 5px;
+  font: var(--fw-semibold) 8px/1.4 var(--sans);
+  letter-spacing: .08em;
+  color: var(--a);
+  background: var(--a-dim);
+  border: 1px solid var(--a-line);
+  border-radius: 999px;
+}
+.result-tags > p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fz-2xs);
+  line-height: 1.45;
+  color: var(--fg-2);
+}
+.result-bottom { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.result-params {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.result-params::-webkit-scrollbar { display: none; }
+.result-param {
+  flex: none;
+  padding: 6px 8px;
+  font-size: var(--fz-2xs);
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--fg-2);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+}
+.result-param[hidden] { display: none; }
+.result-actions { display: flex; flex: none; align-items: center; gap: 4px; }
+.result-actions .ibtn {
+  width: 36px;
+  height: 36px;
+  --ico: 17px;
+  color: var(--fg-2);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.result-actions .ibtn:hover { color: var(--fg); background: var(--hover); border-color: var(--line-2); }
+.result-actions [data-tip]::after {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform: translate(0, 3px);
+}
+.result-actions [data-tip]:hover::after { transform: translate(0, 0); }
 
 /* skeleton at the exact target ratio (aspect-ratio set inline by JS) */
 .skeleton {
@@ -1729,7 +1788,7 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     height: clamp(440px, calc(100svh - var(--bar-h)), 720px);
     padding: var(--sp-3);
   }
-  .stage-tools { top: var(--sp-2); right: var(--sp-2); }
+  .result-panel { padding: 10px var(--sp-3) var(--sp-3); gap: var(--sp-2); }
 
   /* History lives below the tools inside the manually opened side rail. */
   .topbar-history-slot .gallery {
@@ -1864,8 +1923,9 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   .pair { grid-template-columns: 1fr 1fr; }
   .seg { grid-auto-flow: row; }
 
-  /* Keep the smallest image surface free of long parameter strings. */
-  .print-meta { display: none; }
+  .result-bottom { gap: var(--sp-2); }
+  .result-param { padding-inline: 8px; }
+  .result-actions { gap: 2px; }
 }
 
 @media (max-width: 380px) {
@@ -1878,7 +1938,6 @@ body[data-drop="on"] .dropzone-card { transform: none; }
 @media (hover: none) {
   [data-tip]::after { content: none; }
   .tile-x { opacity: 1; }          /* no hover to reveal the delete button */
-  .print-meta { opacity: 1; transform: none; }
 
   /* WCAG 2.5.5: 44px minimum. The desktop sizes (32/26px) are fine for a
      mouse but not a fingertip. Grown via padding and a negative margin so
@@ -1887,7 +1946,7 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     width: 44px; height: 44px;
   }
   .topbar-end { gap: 0; }
-  .stage-tools { gap: 0; }
+  .result-actions { gap: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
