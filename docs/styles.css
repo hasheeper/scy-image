@@ -863,16 +863,17 @@ body[data-gate="open"] .gate-card { transform: none; }
 .meter {
   position: relative;
   display: grid;
-  grid-template-columns: 20px auto auto;
+  grid-template-columns: 18px auto auto;
   grid-template-areas: "i k v" "b b b";
   align-items: center;
-  gap: 0 7px;
-  padding: 6px 10px 7px;
-  min-width: 142px;
+  gap: 0 6px;
+  padding: 5px 8px 6px;
+  min-width: 132px;
   background: var(--well);
   border: 1px solid var(--line);
   border-radius: var(--r2);
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+  transform: translateY(2px);
   transition: border-color var(--t1) var(--e), background var(--t1) var(--e), box-shadow var(--t1) var(--e);
 }
 .meter:hover {
@@ -881,8 +882,8 @@ body[data-gate="open"] .gate-card { transform: none; }
 }
 .meter-icon {
   grid-area: i;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   color: var(--a);
   fill: currentColor;
   stroke: none;
@@ -910,7 +911,7 @@ body[data-gate="open"] .gate-card { transform: none; }
    enough that it never becomes the loudest thing on the bar. */
 .meter-bar {
   grid-area: b;
-  margin-top: 4px;
+  margin-top: 3px;
   height: 2px;
   border-radius: 2px;
   background: var(--line-2);
@@ -1682,11 +1683,10 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   .topbar { gap: var(--sp-2); padding: 0 var(--sp-3); }
   .brand { font-size: var(--fz-lg); gap: 7px; }
   .brand .ico { width: 21px; height: 21px; }
-  .meter { min-width: 138px; gap: 0 6px; padding: 6px 9px; grid-template-areas: "i k v"; }
+  .meter { min-width: 138px; padding: 5px 9px 6px; }
   .meter-icon { width: 18px; height: 18px; }
   .meter-k { font-size: 9px; letter-spacing: 0.06em; }
   .meter-v b { font-size: var(--fz-xs); }
-  .meter-bar { display: none; }
 
   .topbar-menu-toggle {
     display: inline-grid;
