@@ -709,13 +709,10 @@ function setResultParam(id, value) {
 function renderResultInfo(item) {
   const params = item.params || {};
   const knownModel = catalog.models.find((model) => model.id === params.model)?.name;
-  const tags = params.prompt || "无 Tag";
 
   $("resultName").textContent = imageFileName(item);
   $("resultName").title = imageFileName(item);
   $("resultModel").textContent = knownModel || params.modelName || params.model || "未知模型";
-  $("resultTags").textContent = tags;
-  $("resultTags").title = tags;
 
   const seed = params.isComparison
     ? (params.seedStart != null ? `# ${params.seedStart}+` : "# 多 Seed")

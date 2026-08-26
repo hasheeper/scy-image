@@ -1176,27 +1176,6 @@ body[data-state="done"] .result-panel { display: grid; }
   color: var(--fg);
 }
 .result-model { font-size: var(--fz-2xs); color: var(--fg-3); }
-.result-tags { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 2px; }
-.result-tags > span {
-  flex: none;
-  padding: 1px 5px;
-  font: var(--fw-semibold) 8px/1.4 var(--sans);
-  letter-spacing: .08em;
-  color: var(--a);
-  background: var(--a-dim);
-  border: 1px solid var(--a-line);
-  border-radius: 999px;
-}
-.result-tags > p {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fz-2xs);
-  line-height: 1.45;
-  color: var(--fg-2);
-}
 .result-bottom { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
 .result-params {
   display: flex;
