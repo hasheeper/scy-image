@@ -12,16 +12,12 @@
     <link rel="stylesheet" href="./fonts/noto-sans-sc/index.css">
     <link rel="stylesheet" href="./fonts/jetbrains-mono/index.css">
     <link rel="stylesheet" href="./styles.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%23111'/><path d='M8 21l5-6 4 4.5 3-3.5 4 5z' fill='%23b3a1ff'/><circle cx='12.5' cy='11' r='2' fill='%23b3a1ff'/></svg>">
+    <link rel="icon" type="image/png" href="./assets/scylla-icon-small.png">
   </head>
   <body data-state="boot">
     <!-- Icon sprite -->
     <svg class="sprite" aria-hidden="true">
       <defs>
-        <symbol id="i-logo" viewBox="0 0 24 24">
-          <path d="M4 17.5l4-4.5 3 3.5 2.5-3 6.5 8" /><circle cx="9" cy="8" r="1.8" />
-          <rect x="2.5" y="3.5" width="19" height="17" rx="3.5" />
-        </symbol>
         <symbol id="i-lock" viewBox="0 0 24 24">
           <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
         </symbol>
@@ -89,9 +85,9 @@
     <!-- ══ Key gate ═══════════════════════════════════════════ -->
     <div class="gate" id="gate" hidden>
       <div class="gate-card" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
-        <div class="gate-brand">
-          <svg class="ico ico-lg"><use href="#i-logo" /></svg>
-          <h1 id="gateTitle">Scylla</h1>
+        <div class="gate-brand app-gate-brand">
+          <img class="gate-brand-mark" src="./assets/scylla-icon-small.png" width="128" height="128" alt="">
+          <h1 class="brand-title" id="gateTitle">Scylla</h1>
         </div>
 
         <section class="gate-view" data-view="setup">
@@ -143,9 +139,12 @@
 
     <!-- ══ App ════════════════════════════════════════════════ -->
     <header class="topbar">
-      <div class="brand">
-        <svg class="ico"><use href="#i-logo" /></svg>
-        <span>Scylla <b>Image</b></span>
+      <div class="brand" aria-label="Scylla Image">
+        <img class="brand-mark" src="./assets/scylla-icon-small.png" width="128" height="128" alt="">
+        <span class="brand-wordmark">
+          <span class="brand-title">Scylla</span>
+          <span class="brand-subtitle">IMAGE</span>
+        </span>
       </div>
 
       <!-- The billed point balance stays visible; image quota remains internal

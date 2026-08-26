@@ -793,6 +793,15 @@ body[data-gate="open"] .gate-card { transform: none; }
 .gate-brand { display: flex; align-items: center; gap: var(--sp-3); }
 .gate-brand .ico { color: var(--a); }
 .gate-brand h1 { font-size: var(--fz-2xl); font-weight: var(--fw-bold); letter-spacing: -0.025em; }
+.app-gate-brand { gap: 11px; }
+.gate-brand-mark {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 50%;
+  filter: drop-shadow(0 4px 10px rgba(115, 54, 135, 0.28));
+}
+.app-gate-brand .brand-title { font-size: 25px; }
 
 .lede { margin-top: calc(var(--sp-4) * -1 + 2px); color: var(--fg-2); font-size: var(--fz-sm); line-height: 1.6; }
 .gate-view { display: grid; gap: var(--sp-3); }
@@ -825,16 +834,41 @@ body[data-gate="open"] .gate-card { transform: none; }
 }
 .brand {
   display: flex; align-items: center; gap: 9px;
-  font-size: var(--fz-xl); font-weight: var(--fw-regular);
-  letter-spacing: -0.028em;
-  color: var(--fg-3);
   flex: none;
   white-space: nowrap;
 }
-/* The mark carries the identity, so it is sized to the cap height of the
-   wordmark rather than to the generic --ico used by the tool buttons. */
-.brand .ico { width: 26px; height: 26px; stroke-width: 1.7; color: var(--a); }
-.brand b { font-weight: var(--fw-bold); color: var(--fg); }
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 50%;
+  filter: drop-shadow(0 3px 8px rgba(115, 54, 135, 0.24));
+}
+.brand-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1;
+}
+.brand-title {
+  color: #f7f3ff;
+  background: linear-gradient(112deg, #ffffff 4%, #eadcff 48%, #bd93f7 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-family: var(--sans);
+  font-size: 22px;
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.055em;
+  line-height: 1;
+  text-shadow: 0 0 18px rgba(189, 147, 247, 0.09);
+}
+.brand-subtitle {
+  color: rgba(255, 255, 255, 0.88);
+  font: var(--fw-bold) 11px/1 var(--sans);
+  letter-spacing: 0.11em;
+  transform: translateY(-0.5px);
+}
 
 .topbar-menu { display: flex; align-items: center; margin-left: auto; flex: none; }
 .topbar-menu-toggle,
@@ -1716,8 +1750,10 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   /* Infrequent tools move into an off-canvas rail, leaving the image width
      untouched while the point balance remains comfortably readable. */
   .topbar { gap: var(--sp-2); padding: 0 var(--sp-3); }
-  .brand { font-size: var(--fz-lg); gap: 7px; }
-  .brand .ico { width: 21px; height: 21px; }
+  .brand { gap: 7px; }
+  .brand-mark { width: 25px; height: 25px; }
+  .brand-title { font-size: 18px; }
+  .brand-subtitle { font-size: 9px; letter-spacing: 0.1em; }
   .meter { min-width: 138px; padding: 5px 9px 6px; }
   .meter-icon { width: 18px; height: 18px; }
   .meter-k { font-size: 9px; letter-spacing: 0.06em; }
@@ -1940,8 +1976,9 @@ body[data-drop="on"] .dropzone-card { transform: none; }
 
 @media (max-width: 480px) {
   /* Compact but complete now that utility actions live in the side rail. */
-  .brand { font-size: var(--fz-md); gap: 7px; }
-  .brand .ico { width: 20px; height: 20px; }
+  .brand { gap: 6px; }
+  .brand-mark { width: 24px; height: 24px; }
+  .brand-wordmark { gap: 6px; }
   .topbar { padding-inline: 10px; gap: 6px; }
   .meter { min-width: 134px; padding-inline: 8px; }
   .topbar-menu-toggle { width: 36px; height: 36px; --ico: 19px; }
@@ -1956,7 +1993,6 @@ body[data-drop="on"] .dropzone-card { transform: none; }
 }
 
 @media (max-width: 380px) {
-  .brand b { display: none; }
   .meter { min-width: 132px; }
 }
 

@@ -13,12 +13,11 @@
     <link rel="stylesheet" href="./fonts/jetbrains-mono/index.css">
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./tags.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%23111'/><circle cx='14' cy='14' r='7' fill='none' stroke='%23b3a1ff' stroke-width='2'/><path d='m19.5 19.5 5 5' stroke='%23b3a1ff' stroke-width='2'/></svg>">
+    <link rel="icon" type="image/png" href="./assets/scylla-icon-small.png">
   </head>
   <body class="tags-body">
     <svg class="sprite" aria-hidden="true">
       <defs>
-        <symbol id="i-logo" viewBox="0 0 24 24"><path d="M4 17.5l4-4.5 3 3.5 2.5-3 6.5 8" /><circle cx="9" cy="8" r="1.8" /><rect x="2.5" y="3.5" width="19" height="17" rx="3.5" /></symbol>
         <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4 4" /></symbol>
         <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5" /><path d="M15 6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15" /></symbol>
         <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7" /></symbol>
@@ -35,8 +34,12 @@
     </svg>
 
     <header class="topbar tags-topbar">
-      <a class="brand tags-brand" href="./index.html">
-        <svg class="ico"><use href="#i-logo" /></svg><span>Scylla</span>
+      <a class="brand tags-brand" href="./index.html" aria-label="返回 Scylla Image">
+        <img class="brand-mark" src="./assets/scylla-icon-small.png" width="128" height="128" alt="">
+        <span class="brand-wordmark">
+          <span class="brand-title">Scylla</span>
+          <span class="brand-subtitle">TAGS</span>
+        </span>
       </a>
       <a class="btn btn-quiet btn-sm tags-back" href="./index.html"><svg class="ico"><use href="#i-back" /></svg>返回生成器</a>
     </header>
