@@ -8,17 +8,24 @@
  * object URLs die with the document.
  */
 
-/* Cap chosen for memory, not aesthetics. A decoded 1216x832 bitmap costs
-   w*h*4 = 3.9 MB of GPU/renderer memory, so rendering full-size blobs as
-   thumbnails at 40 items reached ~218 MB and got the tab killed. History now
-   stores a small JPEG thumbnail for the rail and keeps the full blob only for
-   the current image + downloads. */
-/* One full 24-image batch can also contribute its generated comparison sheet. */
-const MAX_ITEMS = 25;
+/* History uses downscaled rail thumbnails. The full-image retention limit is a
+   user preference: 0 means unlimited, while the UI maps its off state to 1. */
+const DEFAULT_MAX_ITEMS = 25;
 const THUMB_EDGE = 240;
 const LEGACY_DB = "scy-image-studio";
 
 let items = [];
+let maxItems = DEFAULT_MAX_ITEMS;
+
+function release(record) {
+  if (record.url) URL.revokeObjectURL(record.url);
+  if (record.thumbUrl) URL.revokeObjectURL(record.thumbUrl);
+}
+
+function trim() {
+  if (maxItems === 0) return;
+  for (const stale of items.splice(maxItems)) release(stale);
+}
 
 /** Downscale to a cheap JPEG for the rail. Falls back to the original. */
 export async function makeThumb(blob) {
@@ -48,13 +55,14 @@ export const history = {
       ...entry
     };
     items.unshift(record);
-
-    // Drop the tail and release every URL it owns.
-    for (const stale of items.splice(MAX_ITEMS)) {
-      if (stale.url) URL.revokeObjectURL(stale.url);
-      if (stale.thumbUrl) URL.revokeObjectURL(stale.thumbUrl);
-    }
+    trim();
     return record;
+  },
+
+  setLimit(value) {
+    const n = Math.floor(Number(value));
+    maxItems = Number.isFinite(n) ? Math.max(0, n) : DEFAULT_MAX_ITEMS;
+    trim();
   },
 
   all() {
@@ -69,15 +77,11 @@ export const history = {
     const index = items.findIndex((item) => item.id === id);
     if (index < 0) return;
     const [gone] = items.splice(index, 1);
-    if (gone?.url) URL.revokeObjectURL(gone.url);
-    if (gone?.thumbUrl) URL.revokeObjectURL(gone.thumbUrl);
+    if (gone) release(gone);
   },
 
   clear() {
-    for (const item of items) {
-      if (item.url) URL.revokeObjectURL(item.url);
-      if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl);
-    }
+    for (const item of items) release(item);
     items = [];
   },
 

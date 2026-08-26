@@ -1060,6 +1060,15 @@ body[data-drag="on"] .viewport { pointer-events: none; }
 }
 @keyframes drawerIn { from { opacity: 0; transform: translateY(-6px); } }
 
+.settings-block { display: grid; gap: 7px; }
+.settings-block + .settings-block {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.setting-line { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.setting-line > label { font-size: var(--fz-xs); font-weight: var(--fw-medium); color: var(--fg-3); }
+.setting-count { width: 104px; flex: none; }
+
 .seed { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-2); }
 
 /* ── Stage ───────────────────────────────────────────────────── */

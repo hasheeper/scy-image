@@ -25,7 +25,6 @@ const RATIOS = [
 const SNAP = 64;
 const DIM_MIN = 64;
 const DIM_MAX = 2048;
-const BATCH_MAX = 24;
 const UINT32_RANGE = 4_294_967_296;
 const GENERATION_LOCK = "scylla-image-generation-v1";
 const QUOTA_TTL = 60_000;
@@ -34,7 +33,8 @@ const BATCH_HINT = "严格逐张请求；失败或取消时停止剩余队列。
 const DEFAULTS = {
   sampler: "k_euler_ancestral",
   steps: 25, scale: 5, cfg: 10,
-  batchCount: 1, optimize: false, serverCache: false, localCache: true
+  batchCount: 1, optimize: false, serverCache: false,
+  localCache: true, historyLimit: 25
 };
 
 /* True when the size matches no preset, or the user picked the custom card. */
@@ -62,6 +62,7 @@ let quotaResetTimer = null;
 let quotaLoading = false;
 let batchRestricted = false;
 let requestedBatchCount = DEFAULTS.batchCount;
+let requestedHistoryLimit = DEFAULTS.historyLimit;
 const urls = new Map();
 
 /* While a job runs the user may click an earlier thumbnail to look at it. That
@@ -335,7 +336,6 @@ function syncAdvBadge() {
   if (batchCount() !== DEFAULTS.batchCount) n += 1;
   if ($("optimize").checked !== DEFAULTS.optimize) n += 1;
   if ($("serverCache").checked !== DEFAULTS.serverCache) n += 1;
-  if ($("localCache").checked !== DEFAULTS.localCache) n += 1;
 
   const badge = $("advBadge");
   badge.hidden = n === 0;
@@ -362,7 +362,7 @@ function syncPromptCount() {
 
 function normalizedBatchCount(value) {
   const n = Math.floor(Number(value));
-  return Number.isFinite(n) ? Math.min(BATCH_MAX, Math.max(1, n)) : DEFAULTS.batchCount;
+  return Number.isFinite(n) ? Math.max(1, n) : DEFAULTS.batchCount;
 }
 
 function batchCount() {
@@ -385,6 +385,31 @@ function commitBatchCount() {
 
 function syncGenerateLabel() {
   if (!jobActive) $("goLabel").textContent = `生成 ×${batchCount()}`;
+}
+
+function normalizedHistoryLimit(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return DEFAULTS.historyLimit;
+  }
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? Math.max(0, n) : DEFAULTS.historyLimit;
+}
+
+/* The switch is a compact policy choice, not a promise to retain nothing:
+   off keeps only the latest image, while 0 in the custom field means no cap. */
+function syncHistoryPolicy({ rerender = false } = {}) {
+  const enabled = $("localCache").checked;
+  const input = $("historyLimit");
+  input.disabled = !enabled;
+  input.value = String(enabled ? requestedHistoryLimit : 1);
+  history.setLimit(enabled ? requestedHistoryLimit : 1);
+  if (rerender) renderGallery();
+}
+
+function commitHistoryLimit() {
+  requestedHistoryLimit = normalizedHistoryLimit($("historyLimit").value);
+  syncHistoryPolicy({ rerender: true });
+  persist();
 }
 
 function quotaValue(value) {
@@ -465,7 +490,7 @@ function syncQuotaControls({ announce = false } = {}) {
   input.value = String(batchRestricted ? 1 : requestedBatchCount);
   $("batchRange").textContent = policy.serialUnavailable
     ? (quotaLoading ? "校验中" : "额度未知")
-    : batchRestricted ? "仅单张" : "1–24 张";
+    : batchRestricted ? "仅单张" : "1 张起";
   $("batchHint").textContent = policy.serialUnavailable
     ? quotaLoading
       ? "正在读取临时 Key 全局日额度，串行暂不可用。"
@@ -547,7 +572,8 @@ function persist() {
     seed: $("seed").value,
     batchCount: requestedBatchCount,
     optimize: $("optimize").checked, serverCache: $("serverCache").checked,
-    localCache: $("localCache").checked
+    localCache: $("localCache").checked,
+    historyLimit: requestedHistoryLimit
   });
 }
 
@@ -572,6 +598,8 @@ function restore() {
   $("optimize").checked = s.optimize ?? DEFAULTS.optimize;
   $("serverCache").checked = s.serverCache ?? DEFAULTS.serverCache;
   $("localCache").checked = s.localCache ?? DEFAULTS.localCache;
+  requestedHistoryLimit = normalizedHistoryLimit(s.historyLimit ?? DEFAULTS.historyLimit);
+  syncHistoryPolicy();
 }
 
 /* Median of past durations. Measured spread is wide and driven by upstream
@@ -587,8 +615,8 @@ function typicalMs(items) {
 function renderGallery() {
   const items = history.all();
   const tray = $("tray");
-  // Keep the current non-history result alive as well. Without this, turning
-  // off "加入历史" revoked its object URL as soon as the gallery rerendered.
+  // Keep a result being viewed alive even if a smaller retention limit has
+  // already removed its thumbnail from the history rail.
   const seen = new Set(current?.id ? [current.id] : []);
 
   tray.innerHTML = "";
@@ -777,7 +805,6 @@ function collect() {
     seed,
     randomSeed: raw === "",
     batchCount: batchCount(),
-    localHistory: $("localCache").checked,
     optimize: $("optimize").checked,
     cache: $("serverCache").checked,
     transform_prompt: false
@@ -806,7 +833,7 @@ function comparisonColumns(total) {
   if (total <= 4) return 2;
   if (total <= 9) return 3;
   if (total <= 16) return 4;
-  return 5;
+  return Math.ceil(Math.sqrt(total));
 }
 
 async function drawBlobContained(ctx, blob, x, y, width, height) {
@@ -1009,16 +1036,11 @@ async function runBatch(base) {
       if (probe.decode) await probe.decode().catch(() => {});
       URL.revokeObjectURL(tmp);
 
-      let record;
-      if (base.localHistory) {
-        const thumb = await makeThumb(blob);
-        record = history.add({
-          blob, params, size, ms,
-          thumbUrl: thumb ? URL.createObjectURL(thumb) : null
-        });
-      } else {
-        record = { id: `live-${Date.now()}`, createdAt: Date.now(), blob, params, size, ms };
-      }
+      const thumb = await makeThumb(blob);
+      const record = history.add({
+        blob, params, size, ms,
+        thumbUrl: thumb ? URL.createObjectURL(thumb) : null
+      });
       completed += 1;
       completedRecords.push(record);
       pendingShape = { ...pendingShape, done: completed };
@@ -1132,10 +1154,6 @@ async function run() {
   commitBatchCount();
   const params = collect();
   if (!params.model) { toast("模型列表未就绪"); return; }
-  if (params.batchCount > 1 && !params.localHistory) {
-    toast("串行批量需要开启「加入历史」，否则前面的结果无法保留");
-    return;
-  }
 
   // Freeze the shape before the first request; the form stays editable.
   pendingShape = { width: params.width, height: params.height, index: 1, total: params.batchCount };
@@ -1280,9 +1298,24 @@ for (const id of ["width", "height"]) {
 for (const id of ["steps", "scale", "cfg"]) {
   $(id).addEventListener("input", () => { syncRangeLabels(); syncAdvBadge(); persist(); });
 }
-for (const id of ["optimize", "serverCache", "localCache"]) {
+for (const id of ["optimize", "serverCache"]) {
   $(id).addEventListener("change", () => { syncAdvBadge(); persist(); });
 }
+$("localCache").addEventListener("change", () => {
+  syncHistoryPolicy({ rerender: true });
+  persist();
+});
+$("historyLimit").addEventListener("change", commitHistoryLimit);
+$("historyLimit").addEventListener("input", (event) => {
+  if (event.target.value.trim() === "") return;
+  requestedHistoryLimit = normalizedHistoryLimit(event.target.value);
+  history.setLimit(requestedHistoryLimit);
+  renderGallery();
+  persistSoon();
+});
+$("historyLimit").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); commitHistoryLimit(); }
+});
 $("seed").addEventListener("input", () => { syncAdvBadge(); persistSoon(); });
 $("batchCount").addEventListener("input", () => {
   if (!batchRestricted) requestedBatchCount = normalizedBatchCount($("batchCount").value);
@@ -1307,7 +1340,6 @@ $("resetAdv").addEventListener("click", () => {
   setRequestedBatchCount(DEFAULTS.batchCount);
   $("optimize").checked = DEFAULTS.optimize;
   $("serverCache").checked = DEFAULTS.serverCache;
-  $("localCache").checked = DEFAULTS.localCache;
   syncRangeLabels(); syncAdvBadge(); syncGenerateLabel(); persist();
 });
 
@@ -1495,8 +1527,11 @@ const IMPORT_ROWS = [
   { key: "prompt", label: "描述", wide: true },
   { key: "negative_prompt", label: "排除", wide: true },
   { key: "model", label: "模型" },
-  { key: "width", label: "宽" },
-  { key: "height", label: "高" },
+  {
+    fields: ["width", "height"],
+    label: "尺寸",
+    format: (fields) => `${fields.width ?? "—"} × ${fields.height ?? "—"}`
+  },
   { key: "steps", label: "步数" },
   { key: "sampler", label: "采样器" },
   { key: "scale", label: "Scale" },
@@ -1522,8 +1557,10 @@ function openImport(result) {
 
   const unusable = [];
   for (const row of IMPORT_ROWS) {
+    const rowFields = row.fields || [row.key];
+    const presentFields = rowFields.filter((field) => result.fields[field] !== undefined);
+    if (!presentFields.length) continue;
     const value = result.fields[row.key];
-    if (value === undefined) continue;
 
     /* A model or sampler this deployment does not offer cannot be applied.
        Offering the checkbox anyway would tick a box that does nothing. */
@@ -1541,7 +1578,7 @@ function openImport(result) {
     const box = document.createElement("input");
     box.type = "checkbox";
     box.checked = true;
-    box.dataset.field = row.key;
+    box.dataset.fields = presentFields.join(",");
     const tick = document.createElement("span");
     tick.className = "box";
     const key = document.createElement("span");
@@ -1550,7 +1587,8 @@ function openImport(result) {
     const shown = document.createElement("span");
     shown.className = "v";
     // An empty string is a real value here: importing it clears the field.
-    shown.textContent = String(value) === "" ? "（清空）" : String(value);
+    const displayValue = row.format ? row.format(result.fields) : value;
+    shown.textContent = String(displayValue) === "" ? "（清空）" : String(displayValue);
     label.append(box, tick, key, shown);
     list.append(label);
   }
@@ -1585,7 +1623,8 @@ async function readAndOpen(file) {
 $("importApply").addEventListener("click", () => {
   if (!importCandidate) return;
   const wanted = new Set(
-    [...$("importList").querySelectorAll("input:checked")].map((el) => el.dataset.field)
+    [...$("importList").querySelectorAll("input:checked")]
+      .flatMap((el) => el.dataset.fields.split(","))
   );
   if (!wanted.size) {
     toast("没有勾选任何参数");

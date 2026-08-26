@@ -268,17 +268,16 @@
               <div class="fld">
                 <div class="fld-top">
                   <label for="batchCount">串行批量</label>
-                  <span class="mono dim" id="batchRange">1–24 张</span>
+                  <span class="mono dim" id="batchRange">1 张起</span>
                 </div>
                 <div class="fld-inline">
-                  <input id="batchCount" type="number" min="1" max="24" step="1" value="1" inputmode="numeric" aria-describedby="batchHint quotaWarningText">
+                  <input id="batchCount" type="number" min="1" step="1" value="1" inputmode="numeric" aria-describedby="batchHint quotaWarningText">
                   <span>张</span>
                 </div>
                 <p class="hint" id="batchHint">严格逐张请求；失败或取消时停止剩余队列。</p>
               </div>
 
               <div class="switches">
-                <label class="check"><input id="localCache" type="checkbox" checked><span></span>加入历史<i class="sub">刷新后清空</i></label>
                 <label class="check"><input id="serverCache" type="checkbox"><span></span>服务端缓存</label>
                 <label class="check"><input id="optimize" type="checkbox"><span></span>压缩体积<i class="sub">转 JPEG</i></label>
               </div>
@@ -289,20 +288,31 @@
             </div>
           </details>
 
-          <!-- Editor preferences sit apart from 参数: they are not sent
-               upstream and must survive 恢复默认. -->
-          <details class="drawer" id="editorPrefs">
+          <!-- Local settings sit apart from 参数: they are not sent upstream
+               and must survive 恢复默认. -->
+          <details class="drawer" id="settingsPrefs">
             <summary>
-              <span>编辑器</span>
+              <span>设置</span>
               <i class="caret" aria-hidden="true"></i>
             </summary>
             <div class="drawer-body">
-              <div class="switches">
+              <div class="settings-block">
                 <label class="check">
                   <input id="tagSuggest" type="checkbox" checked><span></span>Tag 自动补全<i class="sub">输入时查词典</i>
                 </label>
+                <p class="hint">关闭后不再发送查询，也不弹出候选。</p>
               </div>
-              <p class="hint">关闭后不再发送查询，也不弹出候选。</p>
+              <div class="settings-block">
+                <label class="check"><input id="localCache" type="checkbox" checked><span></span>加入历史<i class="sub">刷新后清空</i></label>
+                <div class="setting-line">
+                  <label for="historyLimit">保留图片</label>
+                  <div class="fld-inline setting-count">
+                    <input id="historyLimit" type="number" min="0" step="1" value="25" inputmode="numeric" aria-describedby="historyLimitHint">
+                    <span>张</span>
+                  </div>
+                </div>
+                <p class="hint" id="historyLimitHint">关闭时保留 1 张；填 0 不限制数量。</p>
+              </div>
             </div>
           </details>
         </div>
