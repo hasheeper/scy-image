@@ -890,7 +890,7 @@ body[data-gate="open"] .gate-card { transform: none; }
 .meters {
   display: flex;
   align-items: stretch;
-  margin-left: 4px;
+  margin-left: 16px;
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
@@ -1981,6 +1981,7 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   .brand-mark { width: 24px; height: 24px; }
   .brand-wordmark { gap: 6px; }
   .topbar { padding-inline: 10px; gap: 6px; }
+  .meters { margin-left: 14px; }
   .meter { min-width: 134px; padding-inline: 8px; }
   .topbar-menu-toggle { width: 36px; height: 36px; --ico: 19px; }
 
@@ -1995,6 +1996,11 @@ body[data-drop="on"] .dropzone-card { transform: none; }
 
 @media (max-width: 380px) {
   .meter { min-width: 132px; }
+}
+
+@media (max-width: 340px) {
+  .topbar { padding-inline: 6px; }
+  .meters { margin-left: 12px; }
 }
 
 /* Tooltips are hover-only affordances; on touch they fire on tap and linger,
