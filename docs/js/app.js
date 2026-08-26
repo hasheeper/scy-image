@@ -412,12 +412,22 @@ function meterNumber(value) {
 /* Paints one gauge. `left`/`total` may be null while the quota is still being
    fetched, which is why every branch has to tolerate a missing number rather
    than rendering NaN. */
+/* Number(null) is 0 and Number.isFinite(0) is true, so a quota that simply has
+   not loaded yet used to test as "0 remaining" and paint the gauge red. An
+   unknown budget must look unknown, never like an emergency. */
+function meterFinite(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function paintMeter(node, leftEl, totalEl, fillEl, left, total) {
-  const known = Number.isFinite(Number(left));
+  const l = meterFinite(left);
+  const t = meterFinite(total);
   leftEl.textContent = meterNumber(left);
-  totalEl.textContent = Number.isFinite(Number(total)) ? `/${meterNumber(total)}` : "";
-  const ratio = (known && Number(total) > 0)
-    ? Math.max(0, Math.min(1, Number(left) / Number(total)))
+  totalEl.textContent = t === null ? "" : `/${meterNumber(total)}`;
+  const ratio = (l !== null && t !== null && t > 0)
+    ? Math.max(0, Math.min(1, l / t))
     : null;
   fillEl.style.width = ratio === null ? "0%" : `${(ratio * 100).toFixed(1)}%`;
   /* Colour is the whole point of a gauge: it must say "fine / getting low /

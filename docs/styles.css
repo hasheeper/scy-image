@@ -139,6 +139,13 @@
     "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
+  /* The header is taller than the inner column heads: it carries the brand and
+     the gauges, they carry a label. These were all one hardcoded 48px, so any
+     change to the header silently broke the shell height and the sticky offset.
+     Two names now, and the dependents reference --bar-h. */
+  --bar-h: 60px;    /* topbar */
+  --head-h: 48px;   /* stage head, gallery head */
+
   --rail: 316px;
   --hist: 132px;
   --cart: 300px;
@@ -502,10 +509,16 @@ select option { background: var(--raised); }
 /* Recessed icon button. Introduced for the prompt block and now shared with the
    header so both read as inset controls cut into the panel rather than as bare
    glyphs floating on it. */
-.fld-actions .ibtn,
-.topbar-end .ibtn {
+.fld-actions .ibtn {
   width: 30px; height: 30px;
   --ico: 19px;
+}
+.topbar-end .ibtn {
+  width: 34px; height: 34px;
+  --ico: 21px;
+}
+.fld-actions .ibtn,
+.topbar-end .ibtn {
   color: var(--fg-2);
   background: var(--well);
   box-shadow: inset 0 0 0 1px var(--line);
@@ -790,7 +803,7 @@ body[data-gate="open"] .gate-card { transform: none; }
 
 /* ── Topbar ──────────────────────────────────────────────────── */
 .topbar {
-  height: 48px; flex: none;
+  height: var(--bar-h); flex: none;
   padding: 0 var(--sp-3);
   display: flex; align-items: center; gap: var(--sp-4);
   border-bottom: 1px solid var(--line);
@@ -798,15 +811,17 @@ body[data-gate="open"] .gate-card { transform: none; }
   position: sticky; top: 0; z-index: var(--z-sticky);
 }
 .brand {
-  display: flex; align-items: center; gap: var(--sp-2);
-  font-size: var(--fz-lg); font-weight: 500;
-  letter-spacing: -0.02em;
-  color: var(--fg-2);
+  display: flex; align-items: center; gap: 9px;
+  font-size: var(--fz-xl); font-weight: 400;
+  letter-spacing: -0.028em;
+  color: var(--fg-3);
   flex: none;
   white-space: nowrap;
 }
+/* The mark carries the identity, so it is sized to the cap height of the
+   wordmark rather than to the generic --ico used by the tool buttons. */
+.brand .ico { width: 26px; height: 26px; stroke-width: 1.7; color: var(--a); }
 .brand b { font-weight: 650; color: var(--fg); }
-.brand .ico { color: var(--a); }
 
 .topbar-end { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; flex: none; }
 
@@ -838,8 +853,8 @@ body[data-gate="open"] .gate-card { transform: none; }
   grid-template-areas: "k v" "b b";
   align-items: baseline;
   gap: 0 var(--sp-2);
-  padding: 4px var(--sp-2) 5px;
-  min-width: 96px;
+  padding: 6px 10px 7px;
+  min-width: 104px;
   background: var(--well);
   border: 1px solid var(--line);
   border-radius: var(--r2);
@@ -849,9 +864,9 @@ body[data-gate="open"] .gate-card { transform: none; }
 /* Uppercase micro-label: it names the figure without competing with it. */
 .meter-k {
   grid-area: k;
-  font: 600 9px/1.2 var(--sans);
-  letter-spacing: 0.09em;
-  color: var(--fg-4);
+  font: 600 var(--fz-2xs)/1.2 var(--sans);
+  letter-spacing: 0.1em;
+  color: var(--fg-3);
   white-space: nowrap;
 }
 .meter-v {
@@ -862,14 +877,14 @@ body[data-gate="open"] .gate-card { transform: none; }
   white-space: nowrap;
   letter-spacing: 0;
 }
-.meter-v b { font: 600 var(--fz-xs)/1.2 var(--mono); color: var(--fg); }
-.meter-v i { font-style: normal; font-size: 9px; color: var(--fg-4); }
+.meter-v b { font: 600 var(--fz-sm)/1.2 var(--mono); color: var(--fg); }
+.meter-v i { font-style: normal; font-size: var(--fz-2xs); color: var(--fg-4); }
 /* Hairline gauge. 2px is enough to read a proportion at a glance and small
    enough that it never becomes the loudest thing on the bar. */
 .meter-bar {
   grid-area: b;
-  margin-top: 4px;
-  height: 2px;
+  margin-top: 5px;
+  height: 3px;
   border-radius: 2px;
   background: var(--line-2);
   overflow: hidden;
@@ -895,7 +910,7 @@ body[data-gate="open"] .gate-card { transform: none; }
 .shell {
   display: grid;
   grid-template-columns: var(--rail) 0 minmax(0, 1fr) var(--hist);
-  height: calc(100vh - 48px);
+  height: calc(100vh - var(--bar-h));
   transition: grid-template-columns var(--t3) var(--e);
 }
 body[data-hist="off"] { --hist: 0px; }
@@ -1023,7 +1038,7 @@ body[data-drag="on"] .viewport { pointer-events: none; }
 .stage { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; background: var(--chrome); }
 
 .stage-head {
-  height: 48px; flex: none;
+  height: var(--head-h); flex: none;
   padding: 0 var(--sp-3);
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   border-bottom: 1px solid var(--line);
@@ -1212,7 +1227,7 @@ body[data-hist="off"] .gallery { border-left-color: transparent; }
    clipped its own label. */
 .gallery-head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
-  height: 48px; flex: none;
+  height: var(--head-h); flex: none;
   padding: 0 var(--sp-2) 0 var(--sp-3);
   border-bottom: 1px solid var(--line);
   font-size: var(--fz-2xs); color: var(--fg-4);
@@ -1597,13 +1612,13 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     grid-template-columns: 1fr;
     grid-template-rows: auto auto;
     height: auto;
-    min-height: calc(100dvh - 48px);
+    min-height: calc(100dvh - var(--bar-h));
   }
   .splitter { display: none; }     /* no pointer to drag with */
 
   /* image first — it is the reason the page exists */
   .stage { order: 1; }
-  .stage-head { position: sticky; top: 48px; z-index: 12; background: var(--chrome); }
+  .stage-head { position: sticky; top: var(--bar-h); z-index: 12; background: var(--chrome); }
   .viewport { height: min(58dvh, 460px); padding: var(--sp-3); }
 
   /* history becomes a horizontal filmstrip under the image */
@@ -1704,7 +1719,10 @@ body[data-drop="on"] .dropzone-card { transform: none; }
 @media (max-width: 480px) {
   /* Four tool buttons plus the brand already fill a 375px bar. POINTS is the
      budget that actually gates generation, so it is the one that survives. */
-  .brand { font-size: var(--fz-md); }
+  /* The wordmark shrinks on phones, so the mark has to follow it or the lockup
+     goes lopsided (26px glyph beside 15px text). */
+  .brand { font-size: var(--fz-md); gap: 7px; }
+  .brand .ico { width: 20px; height: 20px; }
   #meterImages { display: none; }
   .meter-k { font-size: 8px; letter-spacing: 0.06em; }
 
