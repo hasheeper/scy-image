@@ -16,7 +16,12 @@ const status = (imageUsed, tempRemaining, overrides = {}) => ({
 
 assert.deepEqual(quotaPolicy(status(400, 299)), {
   imageUsed: 400,
+  imageRemaining: 600,
+  imageLimit: 1000,
   tempRemaining: 299,
+  unitsRemaining: null,
+  unitsLimit: null,
+  resetSeconds: null,
   serialUnavailable: false,
   serialDisabled: true,
   warning: false

@@ -707,8 +707,7 @@ function showEntry(item, { viaUser = false } = {}) {
     Number.isFinite(item.ms) ? `${(item.ms / 1000).toFixed(1)}s` : ""
   ].filter(Boolean);
   $("stageSub").textContent = bits.join("  ·  ");
-  // Deliberately excludes seed: stageSub above already shows it, and the
-  // duplicate was long enough to wrap this strip onto several lines on phones.
+  // Keep the image chrome short; full parameters remain available via reuse.
   $("printMeta").textContent = [
     item.params?.sampler,
     `${item.params?.steps} steps`,
@@ -1411,6 +1410,27 @@ $("histToggle").addEventListener("click", () => {
   setTimeout(measureFit, 400);
 });
 
+/* Desktop keeps the utility actions inline. On mobile a single quiet menu
+   opens them in a side rail so the brand, quotas and image can keep their room. */
+function setTopbarMenu(open) {
+  if (open) body.dataset.topbarMenu = "open";
+  else delete body.dataset.topbarMenu;
+  $("topbarMenuToggle").setAttribute("aria-expanded", String(open));
+  $("topbarMenuToggle").setAttribute("aria-label", open ? "关闭工具栏" : "打开工具栏");
+}
+
+$("topbarMenuToggle").addEventListener("click", () => {
+  setTopbarMenu(body.dataset.topbarMenu !== "open");
+});
+$("topbarMenuBackdrop").addEventListener("click", () => setTopbarMenu(false));
+$("topbarActions").addEventListener("click", (event) => {
+  if (event.target.closest("button")) setTopbarMenu(false);
+});
+const mobileHeader = matchMedia("(max-width: 860px)");
+mobileHeader.addEventListener?.("change", (event) => {
+  if (!event.matches) setTopbarMenu(false);
+});
+
 /* lightbox */
 function openZoom() {
   if (!current) return;
@@ -1645,7 +1665,8 @@ document.addEventListener("keydown", (e) => {
     if (!$("goBtn").disabled) run();
   }
   if (e.key === "Escape") {
-    if (body.dataset.picker === "open") tagPicker.close();
+    if (body.dataset.topbarMenu === "open") setTopbarMenu(false);
+    else if (body.dataset.picker === "open") tagPicker.close();
     else if (body.dataset.import === "open") closeImport();
     else if (body.dataset.zoom === "on") closeZoom();
     // Return to the running job before treating Escape as "cancel".

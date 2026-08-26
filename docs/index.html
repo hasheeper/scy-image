@@ -6,6 +6,11 @@
     <meta name="color-scheme" content="dark">
     <meta name="robots" content="noindex">
     <title>Scylla</title>
+    <link rel="preload" href="./fonts/manrope/files/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="./fonts/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="./fonts/manrope/index.css">
+    <link rel="stylesheet" href="./fonts/noto-sans-sc/index.css">
+    <link rel="stylesheet" href="./fonts/jetbrains-mono/index.css">
     <link rel="stylesheet" href="./styles.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%23111'/><path d='M8 21l5-6 4 4.5 3-3.5 4 5z' fill='%23b3a1ff'/><circle cx='12.5' cy='11' r='2' fill='%23b3a1ff'/></svg>">
   </head>
@@ -51,6 +56,7 @@
         <symbol id="i-trash" viewBox="0 0 24 24">
           <path d="M5 7.5h14M9.5 7.5V5.5h5v2M7 7.5l.8 11a1.5 1.5 0 0 0 1.5 1.4h5.4a1.5 1.5 0 0 0 1.5-1.4l.8-11" />
         </symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" /></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11m0-11-11 11" /></symbol>
         <symbol id="i-image" viewBox="0 0 24 24">
           <rect x="3" y="4.5" width="18" height="15" rx="3" /><path d="m4 16 4.5-4.5 3 3 2.5-3 6 6" /><circle cx="9" cy="9" r="1.5" />
@@ -143,19 +149,27 @@
         </div>
       </div>
 
-      <div class="topbar-end">
-        <button class="ibtn" id="importBtn" type="button" data-tip="导入参数" aria-label="从图片导入参数">
-          <svg class="ico"><use href="#i-import" /></svg>
+      <div class="topbar-menu">
+        <button class="ibtn topbar-menu-toggle" id="topbarMenuToggle" type="button"
+                aria-controls="topbarActions" aria-expanded="false" aria-label="打开工具栏">
+          <svg class="ico menu-open"><use href="#i-menu" /></svg>
+          <svg class="ico menu-close"><use href="#i-close" /></svg>
         </button>
-        <button class="ibtn" type="button" data-open-picker data-tip="查词插入" aria-label="查词插入">
-          <svg class="ico"><use href="#i-search" /></svg>
-        </button>
-        <button class="ibtn" id="histToggle" type="button" aria-pressed="true" data-tip="历史" aria-label="历史">
-          <svg class="ico"><use href="#i-layers" /></svg>
-        </button>
-        <button class="ibtn" id="lockButton" type="button" data-tip="锁定" aria-label="锁定">
-          <svg class="ico"><use href="#i-lock" /></svg>
-        </button>
+        <button class="topbar-menu-backdrop" id="topbarMenuBackdrop" type="button" aria-label="关闭工具栏"></button>
+        <div class="topbar-end" id="topbarActions" role="group" aria-label="工具">
+          <button class="ibtn" id="importBtn" type="button" data-tip="导入参数" aria-label="从图片导入参数">
+            <svg class="ico"><use href="#i-import" /></svg><span class="topbar-action-label">导入参数</span>
+          </button>
+          <button class="ibtn" type="button" data-open-picker data-tip="查词插入" aria-label="查词插入">
+            <svg class="ico"><use href="#i-search" /></svg><span class="topbar-action-label">查词插入</span>
+          </button>
+          <button class="ibtn" id="histToggle" type="button" aria-pressed="true" data-tip="历史" aria-label="历史">
+            <svg class="ico"><use href="#i-layers" /></svg><span class="topbar-action-label">历史记录</span>
+          </button>
+          <button class="ibtn" id="lockButton" type="button" data-tip="锁定" aria-label="锁定">
+            <svg class="ico"><use href="#i-lock" /></svg><span class="topbar-action-label">锁定</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -314,11 +328,12 @@
 
       <!-- ── Stage ──────────────────────────────────────────── -->
       <section class="stage">
-        <div class="stage-head" id="stageHead">
-          <div class="stage-id">
-            <strong id="stageTitle">就绪</strong>
-            <span class="mono dim" id="stageSub"></span>
-          </div>
+        <div class="stage-status" role="status" aria-live="polite">
+          <strong id="stageTitle">就绪</strong>
+          <span id="stageSub"></span>
+        </div>
+
+        <div class="viewport" id="viewport">
           <div class="stage-tools">
             <button class="ibtn" id="copyBtn" type="button" hidden data-tip="复制描述" aria-label="复制描述">
               <svg class="ico"><use href="#i-copy" /></svg>
@@ -330,9 +345,6 @@
               <svg class="ico"><use href="#i-download" /></svg>
             </button>
           </div>
-        </div>
-
-        <div class="viewport" id="viewport">
           <div class="layer center" data-layer="empty">
             <div class="blank">
               <svg class="ico ico-xl"><use href="#i-image" /></svg>
