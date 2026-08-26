@@ -499,19 +499,28 @@ select option { background: var(--raised); }
 /* The prompt block's two actions carry real weight now that the labels are
    gone: bigger glyph, brighter idle colour, and a visible resting surface so
    they read as buttons rather than as ornament. */
-.fld-actions .ibtn {
+/* Recessed icon button. Introduced for the prompt block and now shared with the
+   header so both read as inset controls cut into the panel rather than as bare
+   glyphs floating on it. */
+.fld-actions .ibtn,
+.topbar-end .ibtn {
   width: 30px; height: 30px;
   --ico: 19px;
   color: var(--fg-2);
   background: var(--well);
   box-shadow: inset 0 0 0 1px var(--line);
 }
-.fld-actions .ibtn:hover {
+.fld-actions .ibtn:hover,
+.topbar-end .ibtn:hover {
   color: var(--fg);
   background: var(--hover);
   box-shadow: inset 0 0 0 1px var(--line-2);
 }
-.fld-actions .ibtn .ico { stroke-width: 1.9; }
+.fld-actions .ibtn .ico,
+.topbar-end .ibtn .ico { stroke-width: 1.9; }
+/* History toggle when off: still inset, just quieter. */
+.topbar-end .ibtn[aria-pressed="false"] { color: var(--fg-4); }
+.topbar-end .ibtn[aria-pressed="false"]:hover { color: var(--fg-2); }
 .ibtn-accent { color: var(--a); }
 .ibtn-accent:hover { color: var(--a); background: var(--a-dim); }
 /* Settled state after a successful clean — reverts on the next edit. */
@@ -783,20 +792,23 @@ body[data-gate="open"] .gate-card { transform: none; }
 .topbar {
   height: 48px; flex: none;
   padding: 0 var(--sp-3);
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: var(--sp-4);
   border-bottom: 1px solid var(--line);
   background: var(--chrome);
   position: sticky; top: 0; z-index: var(--z-sticky);
 }
 .brand {
   display: flex; align-items: center; gap: var(--sp-2);
-  font-size: var(--fz-lg); font-weight: 650;
+  font-size: var(--fz-lg); font-weight: 500;
   letter-spacing: -0.02em;
-  color: var(--fg);
+  color: var(--fg-2);
+  flex: none;
+  white-space: nowrap;
 }
+.brand b { font-weight: 650; color: var(--fg); }
 .brand .ico { color: var(--a); }
 
-.topbar-end { display: flex; align-items: center; gap: var(--sp-2); }
+.topbar-end { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; flex: none; }
 
 .chip {
   padding: 3px 8px;
@@ -805,6 +817,79 @@ body[data-gate="open"] .gate-card { transform: none; }
   border: 1px solid var(--line);
   border-radius: 20px;
 }
+
+/* ── Header instrument cluster ───────────────────────────────── */
+/* Two day-scoped budgets sit between the brand and the tools. Recessed wells
+   on the bar, same language as the prompt-block buttons, so the header reads
+   as one instrument panel rather than a row of unrelated widgets. */
+.meters {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  min-width: 0;
+  /* Never squeeze the tools: the cluster is the first thing to give up width. */
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+.meter {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas: "k v" "b b";
+  align-items: baseline;
+  gap: 0 var(--sp-2);
+  padding: 4px var(--sp-2) 5px;
+  min-width: 96px;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+  transition: border-color var(--t1) var(--e), background var(--t1) var(--e);
+}
+.meter:hover { border-color: var(--line-2); }
+/* Uppercase micro-label: it names the figure without competing with it. */
+.meter-k {
+  grid-area: k;
+  font: 600 9px/1.2 var(--sans);
+  letter-spacing: 0.09em;
+  color: var(--fg-4);
+  white-space: nowrap;
+}
+.meter-v {
+  grid-area: v;
+  justify-self: end;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.meter-v b { font: 600 var(--fz-xs)/1.2 var(--mono); color: var(--fg); }
+.meter-v i { font-style: normal; font-size: 9px; color: var(--fg-4); }
+/* Hairline gauge. 2px is enough to read a proportion at a glance and small
+   enough that it never becomes the loudest thing on the bar. */
+.meter-bar {
+  grid-area: b;
+  margin-top: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.meter-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--a);
+  transition: width var(--t3) var(--e-out), background var(--t2) var(--e);
+}
+.meter[data-level="low"] .meter-bar > i { background: var(--warn); }
+.meter[data-level="crit"] .meter-bar > i { background: var(--err); }
+.meter[data-level="low"] .meter-v b { color: var(--warn); }
+.meter[data-level="crit"] .meter-v b { color: var(--err); }
+.meter[data-level="unknown"] .meter-v b { color: var(--fg-4); }
+/* Quota in flight: pulse the rail rather than swapping in a spinner, which
+   would make the bar jump. */
+.meters[data-loading="1"] .meter-bar { animation: meterWait 1.1s var(--e) infinite; }
+@keyframes meterWait { 50% { opacity: 0.45; } }
 
 /* ── Shell ───────────────────────────────────────────────────── */
 .shell {
@@ -1500,6 +1585,13 @@ body[data-drop="on"] .dropzone-card { transform: none; }
 @media (max-width: 860px) {
   :root { --ico: 17px; }          /* larger touch targets */
 
+  /* The gauges lose their rails and totals first: on a phone the header has to
+     fit brand + four tools, and the remaining figure is the part worth keeping. */
+  .topbar { gap: var(--sp-3); }
+  .meter { min-width: 0; padding: 3px var(--sp-2); grid-template-areas: "k v"; }
+  .meter-bar { display: none; }
+  .meter-v i { display: none; }
+
   /* dvh avoids the iOS/Android URL-bar height jump */
   .shell {
     grid-template-columns: 1fr;
@@ -1610,6 +1702,12 @@ body[data-drop="on"] .dropzone-card { transform: none; }
 }
 
 @media (max-width: 480px) {
+  /* Four tool buttons plus the brand already fill a 375px bar. POINTS is the
+     budget that actually gates generation, so it is the one that survives. */
+  .brand { font-size: var(--fz-md); }
+  #meterImages { display: none; }
+  .meter-k { font-size: 8px; letter-spacing: 0.06em; }
+
   .ratios { grid-template-columns: repeat(4, 1fr); gap: 5px; }
   .pair { grid-template-columns: 1fr 1fr; }
   .viewport { height: min(52dvh, 380px); }

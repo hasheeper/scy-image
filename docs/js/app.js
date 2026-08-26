@@ -393,8 +393,60 @@ function quotaValue(value) {
   return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(1)));
 }
 
+/* Compact figures: 5280 -> 5.3k, 10000 -> 10k. A header gauge is scanned, not
+   read, so anything past three significant digits is noise that costs width.
+   Compacting starts at 4 digits (not 5) because the well is only ~96px wide,
+   and a trailing ".0" is dropped — "10.0k" reads as false precision. */
+function meterNumber(value) {
+  // `null` coerces to 0, which would render a real "0" for an unknown quota.
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  // Four digits still fit and stay exact; compact only from five.
+  if (n < 10_000) return String(Math.round(n));
+  const k = n / 1000;
+  const text = k < 100 ? k.toFixed(1) : String(Math.round(k));
+  return `${text.replace(/\.0$/, "")}k`;
+}
+
+/* Paints one gauge. `left`/`total` may be null while the quota is still being
+   fetched, which is why every branch has to tolerate a missing number rather
+   than rendering NaN. */
+function paintMeter(node, leftEl, totalEl, fillEl, left, total) {
+  const known = Number.isFinite(Number(left));
+  leftEl.textContent = meterNumber(left);
+  totalEl.textContent = Number.isFinite(Number(total)) ? `/${meterNumber(total)}` : "";
+  const ratio = (known && Number(total) > 0)
+    ? Math.max(0, Math.min(1, Number(left) / Number(total)))
+    : null;
+  fillEl.style.width = ratio === null ? "0%" : `${(ratio * 100).toFixed(1)}%`;
+  /* Colour is the whole point of a gauge: it must say "fine / getting low /
+     nearly out" without being read. */
+  node.dataset.level = ratio === null ? "unknown"
+    : ratio <= 0.1 ? "crit"
+    : ratio <= 0.25 ? "low"
+    : "ok";
+}
+
+function syncMeters() {
+  const policy = quotaPolicy(quotaStatus);
+  paintMeter($("meterImages"), $("imgLeft"), $("imgTotal"), $("imgFill"),
+    policy.imageRemaining, policy.imageLimit);
+  paintMeter($("meterPoints"), $("ptLeft"), $("ptTotal"), $("ptFill"),
+    policy.unitsRemaining, policy.unitsLimit);
+
+  const reset = Number(policy.resetSeconds);
+  const when = Number.isFinite(reset) && reset > 0
+    ? `，约 ${reset >= 3600 ? `${Math.round(reset / 3600)} 小时` : `${Math.max(1, Math.round(reset / 60))} 分钟`}后重置`
+    : "";
+  $("meterImages").dataset.tip = `今日图片额度 剩 ${meterNumber(policy.imageRemaining)}/${meterNumber(policy.imageLimit)}${when}`;
+  $("meterPoints").dataset.tip = `今日点数 剩 ${meterNumber(policy.unitsRemaining)}/${meterNumber(policy.unitsLimit)}${when}`;
+  $("meters").dataset.loading = quotaLoading ? "1" : "0";
+}
+
 function syncQuotaControls({ announce = false } = {}) {
   const policy = quotaPolicy(quotaStatus);
+  syncMeters();
   const wasRestricted = batchRestricted;
   if (!wasRestricted && policy.serialDisabled) {
     requestedBatchCount = normalizedBatchCount($("batchCount").value);
@@ -1737,11 +1789,6 @@ async function enterApp() {
   // nothing to lock.
   $("lockButton").hidden = proxied;
   $("lockButton").dataset.tip = vault.mode() === "session" ? "清除 Key" : "锁定（下次需口令）";
-  $("modeChip").textContent = proxied ? "本地代理" : "浏览器直连";
-  $("modeChip").title = proxied
-    ? "Key 由本地服务持有,浏览器不接触明文"
-    : "浏览器直接携带 Key 请求上游";
-
   try {
     catalog = await fetchCatalog();
     if (!catalog.models.length) throw new Error("上游未返回可用的 NAI 模型");

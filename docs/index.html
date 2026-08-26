@@ -124,10 +124,26 @@
     <header class="topbar">
       <div class="brand">
         <svg class="ico"><use href="#i-logo" /></svg>
-        <span>Scylla</span>
+        <span>Scylla <b>Image</b></span>
       </div>
+
+      <!-- Instrument cluster. Two independent budgets, both day-scoped: the
+           image quota and the unit cost the upstream actually bills. Reads as a
+           gauge, not as chat: label above, monospace figure below. -->
+      <div class="meters" id="meters" aria-live="polite">
+        <div class="meter" id="meterImages" data-tip="今日图片额度">
+          <span class="meter-k">IMAGES</span>
+          <span class="meter-v"><b id="imgLeft">—</b><i id="imgTotal"></i></span>
+          <span class="meter-bar"><i id="imgFill"></i></span>
+        </div>
+        <div class="meter" id="meterPoints" data-tip="今日点数额度">
+          <span class="meter-k">POINTS</span>
+          <span class="meter-v"><b id="ptLeft">—</b><i id="ptTotal"></i></span>
+          <span class="meter-bar"><i id="ptFill"></i></span>
+        </div>
+      </div>
+
       <div class="topbar-end">
-        <span class="chip" id="modeChip"></span>
         <button class="ibtn" id="importBtn" type="button" data-tip="导入参数" aria-label="从图片导入参数">
           <svg class="ico"><use href="#i-import" /></svg>
         </button>

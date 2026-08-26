@@ -120,6 +120,13 @@ function shapeQuota(image, stats, temporaryChecked) {
       used: quotaNumber(temporary.rpd_used),
       remaining: quotaNumber(temporary.rpd_remaining),
       limit: quotaNumber(temporary.rpd),
+      /* The upstream bills two ways: a request count (rpd) and a unit cost
+         (rpd_units, ~10 units per image). Both are day-scoped and reset
+         together, but a heavy request spends units faster than requests, so
+         the two can diverge — the header shows units as the real budget. */
+      unitsUsed: quotaNumber(temporary.rpd_used_units),
+      unitsRemaining: quotaNumber(temporary.rpd_remaining_units),
+      unitsLimit: quotaNumber(temporary.rpd_units),
       resetSeconds: quotaNumber(temporary.reset_seconds)
     } : null
   };

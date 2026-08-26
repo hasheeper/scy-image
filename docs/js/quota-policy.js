@@ -21,7 +21,12 @@ export function quotaPolicy(status) {
 
   return {
     imageUsed,
+    imageRemaining: finite(status?.image?.remaining),
+    imageLimit: finite(status?.image?.limit),
     tempRemaining,
+    unitsRemaining: finite(status?.temporary?.unitsRemaining),
+    unitsLimit: finite(status?.temporary?.unitsLimit),
+    resetSeconds: finite(status?.temporary?.resetSeconds),
     serialUnavailable,
     serialDisabled: serialUnavailable || belowThreshold,
     warning: belowThreshold
@@ -37,6 +42,13 @@ export function recordSuccessfulImage(status, requestCost = 1) {
   const imageRemaining = finite(status.image?.remaining);
   const tempUsed = finite(status.temporary?.used);
   const tempRemaining = finite(status.temporary?.remaining);
+  const unitsUsed = finite(status.temporary?.unitsUsed);
+  const unitsRemaining = finite(status.temporary?.unitsRemaining);
+  /* Derive the units-per-request rate from the quota itself rather than
+     hardcoding 10: the upstream is free to reprice. */
+  const rpd = finite(status.temporary?.limit);
+  const rpdUnits = finite(status.temporary?.unitsLimit);
+  const unitRate = (rpd && rpdUnits) ? rpdUnits / rpd : 1;
 
   return {
     ...status,
@@ -52,7 +64,13 @@ export function recordSuccessfulImage(status, requestCost = 1) {
       used: tempUsed === null ? status.temporary.used : tempUsed + cost,
       remaining: tempRemaining === null
         ? status.temporary.remaining
-        : Math.max(0, tempRemaining - cost)
+        : Math.max(0, tempRemaining - cost),
+      /* Keep units in step with requests. The header reads these directly, so
+         without this the point counter would freeze until the next poll. */
+      unitsUsed: unitsUsed === null ? status.temporary.unitsUsed : unitsUsed + cost * unitRate,
+      unitsRemaining: unitsRemaining === null
+        ? status.temporary.unitsRemaining
+        : Math.max(0, unitsRemaining - cost * unitRate)
     } : status.temporary
   };
 }
