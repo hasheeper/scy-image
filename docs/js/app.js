@@ -1798,6 +1798,24 @@ $("splitter").addEventListener("keydown", (event) => {
 const roTargets = [document.querySelector(".stage"), $("viewport")].filter(Boolean);
 const ro = new ResizeObserver(measureFit);
 for (const el of roTargets) ro.observe(el);
+
+/* The mobile action bar is fixed to the viewport. Publish its real height so
+   the page and toasts reserve exactly the same space, including quota alerts,
+   cancellation controls and the device safe area. */
+function syncMobileFootHeight() {
+  if (!mobileHeader.matches) {
+    document.documentElement.style.removeProperty("--mobile-foot-h");
+    return;
+  }
+  const height = Math.ceil(document.querySelector(".composer-foot").getBoundingClientRect().height);
+  if (height > 0) document.documentElement.style.setProperty("--mobile-foot-h", `${height}px`);
+}
+
+const composerFootObserver = new ResizeObserver(syncMobileFootHeight);
+composerFootObserver.observe(document.querySelector(".composer-foot"));
+mobileHeader.addEventListener?.("change", () => requestAnimationFrame(syncMobileFootHeight));
+syncMobileFootHeight();
+
 window.addEventListener("resize", measureFit);
 window.addEventListener("orientationchange", () => setTimeout(measureFit, 250));
 visualViewport?.addEventListener("resize", measureFit);

@@ -93,6 +93,7 @@
   --ring: 0 0 0 3px var(--a-dim);
 
   /* stacking contract — keep every layer in this table */
+  --z-action: 19;
   --z-sticky: 20;
   --z-tip: 40;
   --z-pop: 80;
@@ -154,6 +155,7 @@
      Two names now, and the dependents reference --bar-h. */
   --bar-h: 60px;    /* topbar */
   --head-h: 48px;   /* stage head, gallery head */
+  --mobile-foot-h: 61px;
 
   --rail: 316px;
   --hist: 132px;
@@ -1758,6 +1760,7 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     grid-template-rows: auto auto;
     height: auto;
     min-height: calc(100dvh - var(--bar-h));
+    padding-bottom: var(--mobile-foot-h);
   }
   .splitter { display: none; }     /* no pointer to drag with */
 
@@ -1828,13 +1831,16 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   .fld-hero { min-height: 0; }
   .fld-hero .hl-wrap { height: auto; min-height: 128px; max-height: 42dvh; }
 
-  /* action bar pinned above the home indicator */
+  /* The primary action belongs to the viewport, not the scroll position. */
   .composer-foot {
-    position: sticky; bottom: 0; z-index: 10;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: var(--z-action);
     padding: var(--sp-2) var(--sp-3) calc(var(--sp-2) + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--chrome) 94%, transparent);
     backdrop-filter: blur(12px);
     border-top: 1px solid var(--line);
+    box-shadow: 0 -10px 28px -20px rgba(0, 0, 0, .9);
   }
   .btn-go { height: 44px; }        /* 44px = comfortable tap target */
 
@@ -1858,7 +1864,7 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     align-content: start;
   }
 
-  .toasts { bottom: calc(var(--sp-3) + env(safe-area-inset-bottom)); }
+  .toasts { bottom: calc(var(--mobile-foot-h) + var(--sp-3)); }
   .lightbox { padding: var(--sp-3); }
   .lightbox-x { top: calc(var(--sp-3) + env(safe-area-inset-top)); right: var(--sp-3); }
 
