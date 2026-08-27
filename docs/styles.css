@@ -162,7 +162,10 @@
      loading state has to read as motion from across the room, and the earlier
      0.10-alpha attempt measured as barely-there. */
   --bar-ink: rgba(214, 205, 255, 0.92);
-  --ripple-ink: rgba(179, 161, 255, 0.26);
+  /* The breathing wash is the quiet layer: it covers the whole frame, so it has
+     to sit near a single surface step (~2.5 dL*), not above it. The 0.26 ring
+     ink measured 17.5 dL* — roughly seven steps, which is what made it shout. */
+  --breathe-ink: rgba(179, 161, 255, 0.055);
 
   --rail: 316px;
   --hist: 132px;
@@ -1308,10 +1311,16 @@ body[data-state="done"] .result-panel { display: grid; }
 .result-actions [data-tip]:hover::after { transform: translate(0, 0); }
 
 /* ── Loading ──────────────────────────────────────────────────
-   Two parts, and only two:
+   Two parts, with a deliberate hierarchy:
 
-     .bar     a sweeping-light progress bar across the top of the frame
-     .ripple  concentric rings spreading through the frame like water
+     .bar       small and bright — a sweeping-light progress bar on the top edge
+     .breathe   large and dim — the whole frame swelling very slowly
+
+   Strength is inverse to area. The previous attempt had five bright rings from
+   three origins on three periods with five offsets: nine independent motion
+   parameters, all loud, none subordinate — which is why it read as noise rather
+   than as depth. One quiet field plus one small bright accent gives the eye a
+   primary and a secondary.
 
    The bar is indeterminate on purpose. The upstream is one POST and one blob
    (api.js) with no step callback, and app.js already notes that duration
@@ -1363,51 +1372,29 @@ body[data-state="done"] .result-panel { display: grid; }
   to   { transform: translate3d(-50%, 0, 0); }
 }
 
-/* Water rings. Two origins with different periods and non-uniform delays: a
-   single metronomic pulse from dead centre is what reads as stiff. */
-.ripple {
+/* The whole frame breathing. No direction and no travel: a soft centre-weighted
+   wash whose opacity swells and recedes on a long, symmetric cycle. One element,
+   one animated property, one period — this is the quiet layer, so it must not
+   compete with the bar for attention. */
+.breathe {
   position: absolute; inset: 0;
-  overflow: hidden;
   border-radius: inherit;
-  contain: paint;
   pointer-events: none;
+  /* Centre-weighted so the swell has a soft core and no visible edge. An
+     ellipse tracks the frame's own aspect instead of imposing a circle on it. */
+  background: radial-gradient(
+    ellipse 78% 62% at 50% 46%,
+    var(--breathe-ink),
+    transparent 72%
+  );
+  will-change: opacity;
+  /* Slow and symmetric: ease-in-out at 7s reads as breathing, where a short or
+     linear cycle reads as a blink or a metronome. */
+  animation: breathe 7s ease-in-out infinite;
 }
-.ripple i {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 46%;
-  aspect-ratio: 1 / 1;
-  border-radius: 50%;
-  /* 2px, not 1.5: at DSF 1 a 1.5px border rounds down to 1 and the ring reads
-     as a hairline rather than a wavefront. */
-  border: 2px solid var(--ripple-ink);
-  opacity: 0;
-  will-change: transform, opacity;
-  /* ease-out travel: fast birth, slow spread — water, not a metronome */
-  animation: rippleOut 4.6s cubic-bezier(0.16, 0.68, 0.3, 1) infinite;
-}
-/* Staggered by uneven fractions of the cycle so the rings never line up. */
-.ripple i:nth-child(1) { animation-delay: 0s; }
-.ripple i:nth-child(2) { animation-delay: 1.15s; }
-.ripple i:nth-child(3) { animation-delay: 2.5s; }
-/* Second origin, off centre and slower, to break the symmetry. */
-.ripple i:nth-child(4) {
-  top: 38%; left: 58%;
-  width: 34%;
-  animation-duration: 6.1s;
-  animation-delay: 0.6s;
-}
-.ripple i:nth-child(5) {
-  top: 64%; left: 41%;
-  width: 30%;
-  animation-duration: 5.4s;
-  animation-delay: 3.2s;
-}
-@keyframes rippleOut {
-  0%   { transform: translate3d(-50%, -50%, 0) scale(0.14); opacity: 0; }
-  10%  { opacity: 1; }
-  55%  { opacity: 0.55; }
-  100% { transform: translate3d(-50%, -50%, 0) scale(3.1); opacity: 0; }
+@keyframes breathe {
+  0%, 100% { opacity: 0.34; }
+  50%      { opacity: 1; }
 }
 
 /* .print zeroes line-height to kill the <img> baseline gap, and the skeleton
@@ -2098,15 +2085,9 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     transition-duration: 0.01ms !important;
   }
   /* The rule above freezes every animation on its first frame, so that frame
-     has to stand on its own. rippleOut starts at scale(0.14)/opacity 0, which
-     would leave nothing visible at all — so pin the rings to a mid-spread
-     resting state and leave the bar as a filled rail. The clock carries the
-     liveness. */
+     has to stand on its own. The breathing cycle starts at opacity 0.34, which
+     is dim enough to look like a mistake when held still, so pin it to its
+     mid-swell value and fill the bar. The clock carries the liveness. */
   .bar i { animation: none !important; transform: none !important; width: 100% !important; }
-  .ripple i {
-    animation: none !important;
-    opacity: 0.5 !important;
-    transform: translate3d(-50%, -50%, 0) scale(1.5) !important;
-  }
-  .ripple i:nth-child(n + 4) { display: none !important; }
+  .breathe { animation: none !important; opacity: 0.72 !important; }
 }
