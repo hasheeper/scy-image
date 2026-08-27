@@ -157,12 +157,12 @@
   --head-h: 48px;   /* gallery head (the stage status is sr-only, not a bar) */
   --mobile-foot-h: 61px;
 
-  /* Loading-state texture. Grain is a pre-rendered fractalNoise tile: a data
-     URI keeps it on the compositor with no canvas and no runtime cost, and a
-     fixed seed makes it byte-identical across builds. Scale ink stays inside
-     the accent hue — coloured noise would fight the whole palette. */
-  --grain: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n" x="0" y="0" width="100%25" height="100%25"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" seed="7" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="180" height="180" filter="url(%23n)"/></svg>');
-  --scale-ink: rgba(179, 161, 255, 0.10);
+  /* Loading-state ink. Both stay inside the accent hue; only lightness moves.
+     These are deliberately far stronger than a surface step (~2.5 dL*): a
+     loading state has to read as motion from across the room, and the earlier
+     0.10-alpha attempt measured as barely-there. */
+  --bar-ink: rgba(214, 205, 255, 0.92);
+  --ripple-ink: rgba(179, 161, 255, 0.26);
 
   --rail: 316px;
   --hist: 132px;
@@ -1307,89 +1307,107 @@ body[data-state="done"] .result-panel { display: grid; }
 }
 .result-actions [data-tip]:hover::after { transform: translate(0, 0); }
 
-/* ── Loading: "latent settle" ─────────────────────────────────
-   Diffusion reads as structure emerging from noise, coarse to fine. A sweeping
-   band is a *text* skeleton idiom ("shape known, content en route") and says
-   nothing about generating an image, so it is replaced by two layers:
+/* ── Loading ──────────────────────────────────────────────────
+   Two parts, and only two:
 
-     .settle-grain    a grain field that drifts (transform only)
-     .settle-scales   interlocking scales that step 6 → 10 → 16 → 26 cells
+     .bar     a sweeping-light progress bar across the top of the frame
+     .ripple  concentric rings spreading through the frame like water
 
-   The whole field changes rung at once. Nothing travels across the panel and
-   nothing fills up. The upstream gives no progress signal at all — one POST,
-   one blob (api.js) — so any monotonic travel toward an endpoint would be
-   fiction. Real progress is carried by text and the batch counter instead.
-
-   --settle (0 → 1, written by JS on a 250ms tick) is an asymptotic envelope:
-   grain fades toward a floor while scale structure firms up. It approaches but
-   never reaches its limit, so the panel is always "settling", never "done". */
+   The bar is indeterminate on purpose. The upstream is one POST and one blob
+   (api.js) with no step callback, and app.js already notes that duration
+   tracks queue depth rather than step count — so a bar that filled toward an
+   end would be fiction. It cycles instead. Real progress stays in the text and
+   the batch counter. */
 .skeleton {
   display: grid; place-items: center;
   width: var(--sk-w, 320px);
   height: var(--sk-h, 460px);
-  /* square cells sized off the short edge, so the long axis simply gets more
-     of them (832x1216 at rung 0 → 6 x 8) */
-  --cols: 6;
-  --cell: calc(min(var(--sk-w, 320px), var(--sk-h, 460px)) / var(--cols));
-  --settle: 0;
   /* faint top-down falloff so the panel is not a flat dark rectangle */
   background:
     linear-gradient(170deg, rgba(255, 255, 255, 0.026), transparent 62%),
     var(--chrome);
   animation: none;
 }
-/* Rungs are discrete on purpose: the step *is* the signature gesture. Cell
-   size is not interpolated — a smooth zoom would read as a slow zoom, not as
-   coarse-to-fine refinement. */
-.skeleton[data-rung="1"] { --cols: 10; }
-.skeleton[data-rung="2"] { --cols: 16; }
-.skeleton[data-rung="3"] { --cols: 26; }
 
-.settle-grain, .settle-scales {
+/* Sweeping-light progress bar, pinned to the top edge of the frame. */
+.bar {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  contain: paint;
+  pointer-events: none;
+  z-index: 2;
+}
+/* Two full periods of the pattern, translated by exactly one — the loop is
+   seamless, so there is no dead frame at the wrap and no stutter at the seam.
+   Only transform animates, so it stays on the compositor. */
+.bar i {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  width: 200%;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(179, 161, 255, 0.30) 12%,
+    var(--bar-ink) 25%,
+    rgba(179, 161, 255, 0.30) 38%,
+    transparent 50%
+  );
+  will-change: transform;
+  animation: barSweep 1.5s linear infinite;
+}
+@keyframes barSweep {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+/* Water rings. Two origins with different periods and non-uniform delays: a
+   single metronomic pulse from dead centre is what reads as stiff. */
+.ripple {
   position: absolute; inset: 0;
   overflow: hidden;
   border-radius: inherit;
   contain: paint;
   pointer-events: none;
 }
-
-/* Grain: noise is loudest early and recedes toward a floor as things settle. */
-.settle-grain { opacity: calc(0.10 - 0.055 * var(--settle)); }
-.settle-grain::before {
-  content: "";
+.ripple i {
   position: absolute;
-  /* oversized so the drift never exposes an edge */
-  inset: -25%;
-  background-image: var(--grain);
-  background-size: 180px 180px;
-  will-change: transform;
-  animation: settleDrift 19s linear infinite;
+  top: 50%; left: 50%;
+  width: 46%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  /* 2px, not 1.5: at DSF 1 a 1.5px border rounds down to 1 and the ring reads
+     as a hairline rather than a wavefront. */
+  border: 2px solid var(--ripple-ink);
+  opacity: 0;
+  will-change: transform, opacity;
+  /* ease-out travel: fast birth, slow spread — water, not a metronome */
+  animation: rippleOut 4.6s cubic-bezier(0.16, 0.68, 0.3, 1) infinite;
 }
-
-/* Scales: the structure that firms up as the grain recedes. */
-.settle-scales { opacity: calc(0.52 + 0.48 * var(--settle)); }
-.settle-scales::before {
-  content: "";
-  position: absolute; inset: 0;
-  /* two identical scale fields, offset half a cell so they interlock */
-  background-image:
-    radial-gradient(circle at 50% 100%, transparent 61%, var(--scale-ink) 63%, transparent 76%),
-    radial-gradient(circle at 50% 100%, transparent 61%, var(--scale-ink) 63%, transparent 76%);
-  background-size: var(--cell) var(--cell);
-  background-position: 0 0, calc(var(--cell) / 2) calc(var(--cell) / 2);
+/* Staggered by uneven fractions of the cycle so the rings never line up. */
+.ripple i:nth-child(1) { animation-delay: 0s; }
+.ripple i:nth-child(2) { animation-delay: 1.15s; }
+.ripple i:nth-child(3) { animation-delay: 2.5s; }
+/* Second origin, off centre and slower, to break the symmetry. */
+.ripple i:nth-child(4) {
+  top: 38%; left: 58%;
+  width: 34%;
+  animation-duration: 6.1s;
+  animation-delay: 0.6s;
 }
-/* Once the finest rung is reached the field stops advancing and only breathes.
-   Holding still would read as a stall; advancing further would promise an end. */
-.skeleton[data-rung="3"] .settle-scales::before {
-  animation: settleBreathe 3.4s ease-in-out infinite;
+.ripple i:nth-child(5) {
+  top: 64%; left: 41%;
+  width: 30%;
+  animation-duration: 5.4s;
+  animation-delay: 3.2s;
 }
-@keyframes settleDrift {
-  from { transform: translate3d(0, 0, 0); }
-  to   { transform: translate3d(180px, 180px, 0); }
-}
-@keyframes settleBreathe {
-  0%, 100% { opacity: 0.88; }
-  50%      { opacity: 1; }
+@keyframes rippleOut {
+  0%   { transform: translate3d(-50%, -50%, 0) scale(0.14); opacity: 0; }
+  10%  { opacity: 1; }
+  55%  { opacity: 0.55; }
+  100% { transform: translate3d(-50%, -50%, 0) scale(3.1); opacity: 0; }
 }
 
 /* .print zeroes line-height to kill the <img> baseline gap, and the skeleton
@@ -1484,14 +1502,9 @@ body[data-hist="off"] .gallery { border-left-color: transparent; }
 .tile:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--line-2), 0 6px 14px -4px rgba(0,0,0,.6); }
 .tile[aria-current="true"] { box-shadow: 0 0 0 1.5px var(--a); }
 
-/* Placeholder for the image still being generated. Carries the same settle
-   field as the stage skeleton so the rail and the viewport read as one pending
-   operation — at 132px it stays on the coarsest rung, since finer cells would
-   turn to mush at this size. */
+/* Placeholder for the image still being generated. Carries the same rings as
+   the stage frame so the rail and the viewport read as one pending operation. */
 .tile-pending {
-  --cols: 4;
-  --cell: calc(var(--hist) / var(--cols));
-  --settle: 0.5;
   background:
     linear-gradient(170deg, rgba(255, 255, 255, 0.026), transparent 62%),
     var(--canvas);
@@ -2085,10 +2098,15 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     transition-duration: 0.01ms !important;
   }
   /* The rule above freezes every animation on its first frame, so that frame
-     has to stand on its own. The old sweep failed this: frame one parked the
-     band off-panel, leaving a dead rectangle. Pin the settle field to its
-     finest rung and let the clock carry the liveness instead. */
-  .skeleton { --cols: 26 !important; --settle: 1 !important; }
-  .settle-grain::before { animation: none !important; transform: none !important; }
-  .settle-scales::before { animation: none !important; opacity: 1 !important; }
+     has to stand on its own. rippleOut starts at scale(0.14)/opacity 0, which
+     would leave nothing visible at all — so pin the rings to a mid-spread
+     resting state and leave the bar as a filled rail. The clock carries the
+     liveness. */
+  .bar i { animation: none !important; transform: none !important; width: 100% !important; }
+  .ripple i {
+    animation: none !important;
+    opacity: 0.5 !important;
+    transform: translate3d(-50%, -50%, 0) scale(1.5) !important;
+  }
+  .ripple i:nth-child(n + 4) { display: none !important; }
 }
