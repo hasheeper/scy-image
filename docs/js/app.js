@@ -647,7 +647,7 @@ function renderGallery() {
     slot.setAttribute("aria-label", label);
     slot.dataset.tip = label;
     const glow = document.createElement("div");
-    glow.className = "breathe";
+    glow.className = "sheen";
     slot.append(glow);
     slot.addEventListener("click", resumeLiveView);
     tray.append(slot);

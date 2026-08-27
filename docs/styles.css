@@ -162,12 +162,10 @@
      loading state has to read as motion from across the room, and the earlier
      0.10-alpha attempt measured as barely-there. */
   --bar-ink: rgba(214, 205, 255, 0.92);
-  /* Sized against the TIME-domain swing, not the static peak: a pulsing layer is
-     seen by how much it changes, not by how bright it gets. Now that the fill is
-     flat rather than feathered it covers the frame evenly, so the same alpha
-     reads far heavier — 0.15 puts the block near L* 19, which is where dark-mode
-     skeleton placeholders normally sit against a panel this dark. */
-  --breathe-ink: rgba(179, 161, 255, 0.15);
+  /* Peak of the travelling band. Only the strip under the band pays this, so the
+     frame keeps its own dark base — unlike a flat fill, where the alpha applies
+     to every pixel and any value high enough to notice washes the panel out. */
+  --sheen-ink: rgba(214, 205, 255, 0.14);
 
   --rail: 316px;
   --hist: 132px;
@@ -1317,14 +1315,15 @@ body[data-state="done"] .result-panel { display: grid; }
 /* ── Loading ──────────────────────────────────────────────────
    Two parts, with a deliberate hierarchy:
 
-     .bar       small and bright — a sweeping-light progress bar on the top edge
-     .breathe   large and dim — the whole frame swelling very slowly
+     .bar     small and bright — a sweeping-light progress bar on the top edge
+     .sheen   large and dark — a wide band of light travelling across the frame
 
-   Strength is inverse to area. The previous attempt had five bright rings from
-   three origins on three periods with five offsets: nine independent motion
-   parameters, all loud, none subordinate — which is why it read as noise rather
-   than as depth. One quiet field plus one small bright accent gives the eye a
-   primary and a secondary.
+   Strength is inverse to area, and neither layer raises the base colour. Two
+   earlier attempts got this wrong in opposite directions: five bright rings from
+   three origins (nine independent motion parameters, none subordinate, read as
+   noise), then a flat fill over the whole frame (visible only by lifting every
+   pixel 10.8 dL* above the panel, read as a pale slab). A travelling highlight
+   over an untouched dark base is what leaves the frame looking deep.
 
    The bar is indeterminate on purpose. The upstream is one POST and one blob
    (api.js) with no step callback, and app.js already notes that duration
@@ -1376,28 +1375,64 @@ body[data-state="done"] .result-panel { display: grid; }
   to   { transform: translate3d(-50%, 0, 0); }
 }
 
-/* The whole frame pulsing, the way a skeleton placeholder block does: a flat
-   even fill that dims and returns. The previous version was a feathered radial
-   wash on a 5.5s cycle, and both of those made it read as soft — a gradient has
-   no edge to register against, and at 5.5s the change per frame is below what
-   registers as movement at all.
+/* A wide, soft band of light travelling across the frame at an angle.
 
-   Flat fill, hard edge, short cycle. This is a placeholder shape holding the
-   spot, not a glow. */
-.breathe {
+   This replaces a flat fill that covered the whole frame. That fill had to raise
+   the base colour to be visible at all — every one of the frame's ~429k pixels
+   sat 10.8 dL* above the panel, with chroma pushed from 4 to 18 — so it read as
+   a pale lilac slab. Depth needs the base to stay dark and only a highlight to
+   move: here the band peaks around L* 21 where it passes, while everywhere else
+   keeps the panel's own L* 8.41.
+
+   Seamless by construction: the pattern repeats every 100% of the frame width
+   and travels exactly one period, so a new band enters as the previous one
+   leaves. The first sweep this project shipped parked its band off-panel for 38%
+   of the cycle (1.10s of dead air); there is no dead phase here.
+
+   Feathering comes from wide gradient ramps rather than a blur filter — this
+   element is four frames wide, and blur cost scales with area. */
+.sheen {
   position: absolute; inset: 0;
+  overflow: hidden;
   border-radius: inherit;
+  contain: paint;
   pointer-events: none;
-  background: var(--breathe-ink);
-  will-change: opacity;
-  animation: breathe 2s ease-in-out infinite;
 }
-/* Rests at full and dips, which is how skeleton blocks read: a solid block that
-   pulses, not a glow rising out of nothing. Never reaches zero — the block is
-   always present, it only varies. */
-@keyframes breathe {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.42; }
+.sheen::before {
+  content: "";
+  position: absolute;
+  /* Oversized on every side so the tilt and the travel never expose a corner. */
+  top: -60%; bottom: -60%;
+  left: -100%; width: 400%;
+  /* One period is 25% of this element, i.e. exactly the frame width. Most of
+     that period is a flat zero-alpha plateau and only the middle carries light,
+     so the band lights roughly a fifth of the frame and the rest keeps the
+     panel's own colour. An unbroken ramp across the whole period — which is what
+     this was at first — lights every pixel to some degree and lifts the median,
+     which is the same washed-out result as a flat fill.
+
+     Explicit zero-alpha stops of the same hue, not `transparent`: keeps the ramp
+     from drifting toward grey as it fades. */
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(214, 205, 255, 0) 0%,
+    rgba(214, 205, 255, 0) 5%,
+    rgba(214, 205, 255, 0.012) 7%,
+    rgba(214, 205, 255, 0.055) 9.8%,
+    var(--sheen-ink) 12.5%,
+    rgba(214, 205, 255, 0.055) 15.2%,
+    rgba(214, 205, 255, 0.012) 18%,
+    rgba(214, 205, 255, 0) 20%,
+    rgba(214, 205, 255, 0) 25%
+  );
+  will-change: transform;
+  /* Linear: an eased loop reads as a stutter at the seam. */
+  animation: sheenSweep 3.6s linear infinite;
+}
+/* 25% of a 400%-wide element is exactly one pattern period. */
+@keyframes sheenSweep {
+  from { transform: translate3d(0, 0, 0) rotate(14deg); }
+  to   { transform: translate3d(25%, 0, 0) rotate(14deg); }
 }
 
 /* .print zeroes line-height to kill the <img> baseline gap, and the skeleton
@@ -2073,10 +2108,24 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  /* The rule above freezes every animation on its first frame, so that frame
-     has to stand on its own. The pulse now rests at full opacity, so its first
-     frame is already the correct static state: a solid placeholder block. Pinned
-     explicitly rather than left to depend on that coincidence. */
+  /* The rule above freezes every animation on its first frame, so that frame has
+     to stand on its own. A travelling band fails that by default: frame one has
+     the band off-panel, which is the dead rectangle this project already shipped
+     once. Replace the sweep with a single static band across the frame — the
+     highlight still reads, it just does not move. */
   .bar i { animation: none !important; transform: none !important; width: 100% !important; }
-  .breathe { animation: none !important; opacity: 1 !important; }
+  .sheen::before {
+    animation: none !important;
+    top: 0 !important; bottom: 0 !important;
+    left: 0 !important; width: 100% !important;
+    transform: none !important;
+    background: linear-gradient(
+      100deg,
+      rgba(214, 205, 255, 0) 34%,
+      rgba(214, 205, 255, 0.05) 44%,
+      var(--sheen-ink) 50%,
+      rgba(214, 205, 255, 0.05) 56%,
+      rgba(214, 205, 255, 0) 66%
+    ) !important;
+  }
 }
