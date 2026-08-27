@@ -647,7 +647,7 @@ function renderGallery() {
     slot.setAttribute("aria-label", label);
     slot.dataset.tip = label;
     const glow = document.createElement("div");
-    glow.className = "shimmer";
+    glow.className = "settle-scales";
     slot.append(glow);
     slot.addEventListener("click", resumeLiveView);
     tray.append(slot);
@@ -974,11 +974,40 @@ async function addComparison(records, base) {
   });
 }
 
-function startTimer() {
+/* Discrete rungs for the settle field, in seconds. Dwell shortens as it goes,
+   which reads as converging; the last rung is terminal and only breathes.
+   Advancing forever would imply an endpoint the upstream never tells us about. */
+const SETTLE_RUNGS = [0, 4.0, 7.2, 9.8];
+const SETTLE_TAU_MS = 22000;
+
+/* Asymptotic, so it never arrives: 1 - exp(-t/tau) approaches 1 without
+   reaching it. tau tracks the observed median when there is one, so a slow
+   upstream settles slowly instead of racing to a floor and sitting there. */
+function settleEnvelope(elapsedMs, typical) {
+  const tau = Number.isFinite(typical) && typical > 0 ? typical / 2.2 : SETTLE_TAU_MS / 2.2;
+  return 1 - Math.exp(-elapsedMs / tau);
+}
+
+function settleRung(elapsedSec) {
+  let rung = 0;
+  for (let i = 0; i < SETTLE_RUNGS.length; i += 1) if (elapsedSec >= SETTLE_RUNGS[i]) rung = i;
+  return rung;
+}
+
+function startTimer(typical) {
   const t0 = performance.now();
+  const sk = $("skeleton");
   $("timer").textContent = "0.0s";
+  sk.dataset.rung = "0";
+  sk.style.setProperty("--settle", "0");
   ticker = setInterval(() => {
-    $("timer").textContent = `${((performance.now() - t0) / 1000).toFixed(1)}s`;
+    const ms = performance.now() - t0;
+    $("timer").textContent = `${(ms / 1000).toFixed(1)}s`;
+    /* Same 100ms tick as the clock: the envelope is a style write, not layout,
+       and a second interval would only be another thing to leak. */
+    const rung = String(settleRung(ms / 1000));
+    if (sk.dataset.rung !== rung) sk.dataset.rung = rung;
+    sk.style.setProperty("--settle", settleEnvelope(ms, typical).toFixed(3));
   }, 100);
 }
 
@@ -997,7 +1026,7 @@ async function runBatch(base) {
   let completed = 0;
   let quotaStopped = false;
   const completedRecords = [];
-  startTimer();
+  startTimer(typical);
   try {
     for (let index = 0; index < total; index += 1) {
       if (cancelRequested) throw new DOMException("已取消", "AbortError");
