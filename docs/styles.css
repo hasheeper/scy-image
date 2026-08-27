@@ -1401,38 +1401,42 @@ body[data-state="done"] .result-panel { display: grid; }
 .sheen::before {
   content: "";
   position: absolute;
-  /* Oversized on every side so the tilt and the travel never expose a corner. */
+  /* Oversized vertically so the tilt never exposes a corner. */
   top: -60%; bottom: -60%;
-  left: -100%; width: 400%;
-  /* One period is 25% of this element, i.e. exactly the frame width. Most of
-     that period is a flat zero-alpha plateau and only the middle carries light,
-     so the band lights roughly a fifth of the frame and the rest keeps the
-     panel's own colour. An unbroken ramp across the whole period — which is what
-     this was at first — lights every pixel to some degree and lifts the median,
-     which is the same washed-out result as a flat fill.
-
-     Explicit zero-alpha stops of the same hue, not `transparent`: keeps the ramp
-     from drifting toward grey as it fades. */
-  background: repeating-linear-gradient(
+  /* 56%, not 40%: only the middle of the gradient is bright enough to register,
+     so a 40% band lit the frame for just 19% of the cycle and the pass read as a
+     blink rather than a sweep. */
+  left: 0; width: 56%;
+  /* ONE band. This was a repeating gradient four periods wide, which meant four
+     highlights were on the frame at once, marching in file — a queue, not a
+     sweep. A sheen is a single pass. */
+  background: linear-gradient(
     90deg,
     rgba(214, 205, 255, 0) 0%,
-    rgba(214, 205, 255, 0) 5%,
-    rgba(214, 205, 255, 0.012) 7%,
-    rgba(214, 205, 255, 0.055) 9.8%,
-    var(--sheen-ink) 12.5%,
-    rgba(214, 205, 255, 0.055) 15.2%,
-    rgba(214, 205, 255, 0.012) 18%,
-    rgba(214, 205, 255, 0) 20%,
-    rgba(214, 205, 255, 0) 25%
+    rgba(214, 205, 255, 0.02) 18%,
+    rgba(214, 205, 255, 0.07) 38%,
+    var(--sheen-ink) 50%,
+    rgba(214, 205, 255, 0.07) 62%,
+    rgba(214, 205, 255, 0.02) 82%,
+    rgba(214, 205, 255, 0) 100%
   );
   will-change: transform;
-  /* Linear: an eased loop reads as a stutter at the seam. */
-  animation: sheenSweep 3.6s linear infinite;
+  animation: sheenSweep 2.8s cubic-bezier(0.45, 0.05, 0.35, 1) infinite;
 }
-/* 25% of a 400%-wide element is exactly one pattern period. */
+/* Crosses in the first 42% (~1.2s) and then waits out the rest off-frame, so
+   each pass is a distinct event with quiet between. The earlier note here said
+   an eased loop "stutters at the seam" — true only for a continuous repeat,
+   where the curve restarts mid-frame. With the band parked off-frame during the
+   gap there is no seam on screen, which is what lets it be eased at all: it
+   accelerates in, is quickest across the middle, and decelerates out, the way a
+   highlight tracks across a surface being tilted.
+
+   Offsets are percentages of the band's own 40% width: -120% clears the left
+   edge, 300% clears the right. */
 @keyframes sheenSweep {
-  from { transform: translate3d(0, 0, 0) rotate(14deg); }
-  to   { transform: translate3d(25%, 0, 0) rotate(14deg); }
+  0%   { transform: translate3d(-110%, 0, 0) rotate(14deg); }
+  52%  { transform: translate3d(190%, 0, 0) rotate(14deg); }
+  100% { transform: translate3d(190%, 0, 0) rotate(14deg); }
 }
 
 /* .print zeroes line-height to kill the <img> baseline gap, and the skeleton
