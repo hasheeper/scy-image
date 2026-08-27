@@ -162,12 +162,12 @@
      loading state has to read as motion from across the room, and the earlier
      0.10-alpha attempt measured as barely-there. */
   --bar-ink: rgba(214, 205, 255, 0.92);
-  /* Sized against the TIME-domain swing, not the static peak. The previous
-     0.055 measured a 2.15 dL* peak, but the cycle only travels between opacity
-     0.34 and 1, so the actual trough-to-peak change was ~1.4 dL* — under one
-     surface step, i.e. invisible. Judging a pulsing layer by its peak alone is
-     the wrong measurement; what the eye sees is the difference. */
-  --breathe-ink: rgba(179, 161, 255, 0.20);
+  /* Sized against the TIME-domain swing, not the static peak: a pulsing layer is
+     seen by how much it changes, not by how bright it gets. Now that the fill is
+     flat rather than feathered it covers the frame evenly, so the same alpha
+     reads far heavier — 0.15 puts the block near L* 19, which is where dark-mode
+     skeleton placeholders normally sit against a panel this dark. */
+  --breathe-ink: rgba(179, 161, 255, 0.15);
 
   --rail: 316px;
   --hist: 132px;
@@ -1376,31 +1376,28 @@ body[data-state="done"] .result-panel { display: grid; }
   to   { transform: translate3d(-50%, 0, 0); }
 }
 
-/* The whole frame breathing. No direction and no travel: a soft centre-weighted
-   wash whose opacity swells and recedes on a long, symmetric cycle. One element,
-   one animated property, one period — this is the quiet layer, so it must not
-   compete with the bar for attention. */
+/* The whole frame pulsing, the way a skeleton placeholder block does: a flat
+   even fill that dims and returns. The previous version was a feathered radial
+   wash on a 5.5s cycle, and both of those made it read as soft — a gradient has
+   no edge to register against, and at 5.5s the change per frame is below what
+   registers as movement at all.
+
+   Flat fill, hard edge, short cycle. This is a placeholder shape holding the
+   spot, not a glow. */
 .breathe {
   position: absolute; inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  /* Centre-weighted so the swell has a soft core and no visible edge. An
-     ellipse tracks the frame's own aspect instead of imposing a circle on it. */
-  background: radial-gradient(
-    ellipse 78% 62% at 50% 46%,
-    var(--breathe-ink),
-    transparent 72%
-  );
+  background: var(--breathe-ink);
   will-change: opacity;
-  /* Slow and symmetric: ease-in-out at 5.5s reads as breathing, where a short or
-     linear cycle reads as a blink or a metronome. */
-  animation: breathe 5.5s ease-in-out infinite;
+  animation: breathe 2s ease-in-out infinite;
 }
-/* Travels most of the way to zero, so the swing itself is the signal rather
-   than a slight brightening of an already-bright wash. */
+/* Rests at full and dips, which is how skeleton blocks read: a solid block that
+   pulses, not a glow rising out of nothing. Never reaches zero — the block is
+   always present, it only varies. */
 @keyframes breathe {
-  0%, 100% { opacity: 0.08; }
-  50%      { opacity: 1; }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.42; }
 }
 
 /* .print zeroes line-height to kill the <img> baseline gap, and the skeleton
@@ -2077,9 +2074,9 @@ body[data-drop="on"] .dropzone-card { transform: none; }
     transition-duration: 0.01ms !important;
   }
   /* The rule above freezes every animation on its first frame, so that frame
-     has to stand on its own. The breathing cycle starts at opacity 0.34, which
-     is dim enough to look like a mistake when held still, so pin it to its
-     mid-swell value and fill the bar. The clock carries the liveness. */
+     has to stand on its own. The pulse now rests at full opacity, so its first
+     frame is already the correct static state: a solid placeholder block. Pinned
+     explicitly rather than left to depend on that coincidence. */
   .bar i { animation: none !important; transform: none !important; width: 100% !important; }
-  .breathe { animation: none !important; opacity: 0.72 !important; }
+  .breathe { animation: none !important; opacity: 1 !important; }
 }
