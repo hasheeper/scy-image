@@ -162,10 +162,12 @@
      loading state has to read as motion from across the room, and the earlier
      0.10-alpha attempt measured as barely-there. */
   --bar-ink: rgba(214, 205, 255, 0.92);
-  /* The breathing wash is the quiet layer: it covers the whole frame, so it has
-     to sit near a single surface step (~2.5 dL*), not above it. The 0.26 ring
-     ink measured 17.5 dL* — roughly seven steps, which is what made it shout. */
-  --breathe-ink: rgba(179, 161, 255, 0.055);
+  /* Sized against the TIME-domain swing, not the static peak. The previous
+     0.055 measured a 2.15 dL* peak, but the cycle only travels between opacity
+     0.34 and 1, so the actual trough-to-peak change was ~1.4 dL* — under one
+     surface step, i.e. invisible. Judging a pulsing layer by its peak alone is
+     the wrong measurement; what the eye sees is the difference. */
+  --breathe-ink: rgba(179, 161, 255, 0.20);
 
   --rail: 316px;
   --hist: 132px;
@@ -1154,7 +1156,9 @@ body[data-drag="on"] .viewport { pointer-events: none; }
 
 /* Generation state remains available to screen readers while visible status
    stays in the busy/error layers instead of consuming a permanent toolbar. */
-.stage-status {
+/* Present to assistive tech, absent from layout and paint. */
+.stage-status,
+.sr-only {
   position: absolute;
   width: 1px; height: 1px;
   padding: 0; margin: -1px;
@@ -1388,12 +1392,14 @@ body[data-state="done"] .result-panel { display: grid; }
     transparent 72%
   );
   will-change: opacity;
-  /* Slow and symmetric: ease-in-out at 7s reads as breathing, where a short or
+  /* Slow and symmetric: ease-in-out at 5.5s reads as breathing, where a short or
      linear cycle reads as a blink or a metronome. */
-  animation: breathe 7s ease-in-out infinite;
+  animation: breathe 5.5s ease-in-out infinite;
 }
+/* Travels most of the way to zero, so the swing itself is the signal rather
+   than a slight brightening of an already-bright wash. */
 @keyframes breathe {
-  0%, 100% { opacity: 0.34; }
+  0%, 100% { opacity: 0.08; }
   50%      { opacity: 1; }
 }
 
@@ -1402,25 +1408,11 @@ body[data-state="done"] .result-panel { display: grid; }
    height, and their glyphs overlapped by 9px while `gap` did nothing (it was
    spacing zero-height boxes). Restore a line box locally; .print keeps its own
    rule for the image case. */
-.skeleton-info {
-  position: relative;
-  display: grid; justify-items: center;
-  gap: var(--sp-1);
-  padding: var(--sp-4);
-  text-align: center;
-  line-height: 1.35;
-}
-/* The panel is large; the readout has to hold its centre rather than float in
-   it as a stray 15px crumb. */
-#timer {
-  font-size: var(--fz-2xl);
-  font-weight: var(--fw-medium);
-  color: var(--fg);
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-/* was --fg-4: 3.46:1 at 11px, under AA */
-.skeleton-note { font-size: var(--fz-xs); color: var(--fg-3); max-width: 30ch; }
+/* The clock and the parameter line are announced, not shown (.sr-only on the
+   wrapper), so they need no visual treatment. Their former centring, sizing and
+   contrast rules are gone with them — including the line-height override that
+   used to be needed here, since .print zeroes line-height for the <img> case
+   and a clipped 1px box has no line box to collapse. */
 
 /* ── History rail (right) ────────────────────────────────────── */
 .gallery {

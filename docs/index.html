@@ -370,7 +370,11 @@
             <div class="print skeleton" id="skeleton">
               <div class="bar"><i></i></div>
               <div class="breathe"></div>
-              <div class="skeleton-info">
+              <!-- The clock and the parameter line used to sit in the middle of
+                   the frame, which read as cheap: a big empty plate with a crumb
+                   of text in it. They stay in the DOM for assistive tech and are
+                   visually hidden; the bar and the swell carry the state. -->
+              <div class="skeleton-info sr-only">
                 <p class="mono" id="timer">0.0s</p>
                 <p class="skeleton-note" id="busyNote"></p>
               </div>
