@@ -341,12 +341,16 @@
           <button class="btn btn-primary btn-go" id="goBtn" type="submit">
             <svg class="ico"><use href="#i-sparkle" /></svg>
             <span id="goLabel">生成 ×1</span>
-            <span class="cost-tag" id="goCost" hidden></span>
+            <span class="cost-tag" id="goCost" hidden>
+              <svg class="ico" aria-hidden="true"><use href="#i-points" /></svg><b></b>
+            </span>
             <kbd>⌘↵</kbd>
           </button>
           <button class="btn btn-cancel btn-block" id="cancelBtn" type="button" hidden>
             <svg class="ico"><use href="#i-stop" /></svg>取消
-            <span class="cost-tag" id="cancelCost" hidden></span>
+            <span class="cost-tag" id="cancelCost" hidden>
+              <svg class="ico" aria-hidden="true"><use href="#i-points" /></svg><b></b>
+            </span>
           </button>
         </div>
       </form>

@@ -427,15 +427,17 @@ function unitCostPerImage() {
 function costText(images) {
   const rate = unitCostPerImage();
   if (rate === null || !Number.isFinite(images) || images <= 0) return "";
-  return `−${Math.round(images * rate)} 点`;
+  return `−${Math.round(images * rate)}`;
 }
 
-/* The cost tag rides inside the button: price next to the action it buys.
-   It vanishes rather than guesses when the quota is not known yet. */
+/* The cost tag rides inside the button: price next to the action it buys —
+   the points glyph from the header gauge names the currency, the figure
+   sits in a <b> beside it. It vanishes rather than guesses when the quota
+   is not known yet. */
 function setCostTag(id, text) {
   const el = $(id);
   el.hidden = !text;
-  el.textContent = text || "";
+  el.querySelector("b").textContent = text || "";
 }
 
 function syncGenerateLabel() {

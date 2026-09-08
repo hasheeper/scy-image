@@ -664,16 +664,55 @@ select option { background: var(--raised); }
 .btn-go kbd { background: rgba(23, 19, 42, 0.16); border-color: transparent; color: rgba(23, 19, 42, 0.66); }
 .btn-primary:disabled kbd { opacity: 0.4; }
 
-/* Price rides inside the action that spends it. Mono + tabular so the
-   figure stays put while the count changes. */
+/* Working ≠ unavailable. Disabled-grey answers "can I press this?" but the
+   moment after pressing the question becomes "is it doing anything?" — so
+   while the form is busy the button stays in the accent family, dimmed to
+   ink-on-dark, with a travelling light band borrowed from the stage sheen.
+   Without this the click appears to do nothing, which reads as a dead UI. */
+#form[aria-busy="true"] .btn-go:disabled {
+  position: relative;
+  overflow: hidden;
+  background: var(--a-dim);
+  color: var(--a);
+  box-shadow: 0 0 0 1px var(--a-line) inset;
+}
+#form[aria-busy="true"] .btn-go:disabled::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg,
+    transparent 30%,
+    rgba(214, 205, 255, 0.16) 50%,
+    transparent 70%);
+  background-size: 250% 100%;
+  animation: goSweep 1.9s cubic-bezier(0.45, 0.05, 0.35, 1) infinite;
+}
+@keyframes goSweep {
+  from { background-position: 130% 0; }
+  to { background-position: -130% 0; }
+}
+/* The shortcut is inert while the job runs; a grey chip inside an active
+   button would just be clutter. */
+#form[aria-busy="true"] .btn-go kbd { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  #form[aria-busy="true"] .btn-go:disabled::after { animation: none; background: none; }
+}
+
+/* Price rides inside the action that spends it: the same four-point glyph
+   as the header gauge names the currency, mono tabular digits keep the
+   figure planted while the count changes. */
 .cost-tag {
+  display: inline-flex; align-items: center; gap: 3px;
   font: var(--fw-semibold) var(--fz-2xs)/1 var(--mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
-  padding: 3px 7px;
+  padding: 3px 8px 3px 6px;
   border-radius: 999px;
   background: rgba(23, 19, 42, 0.18);
   color: rgba(23, 19, 42, 0.78);
+}
+.cost-tag .ico {
+  width: 11px; height: 11px;
+  fill: currentColor; stroke: none;
 }
 .btn-go:disabled .cost-tag { background: var(--well); color: var(--fg-4); }
 
