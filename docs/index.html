@@ -294,6 +294,7 @@
               <div class="switches">
                 <label class="check"><input id="serverCache" type="checkbox"><span></span>服务端缓存</label>
                 <label class="check"><input id="optimize" type="checkbox"><span></span>压缩体积<i class="sub">转 JPEG</i></label>
+                <label class="check" id="transparentBgWrap"><input id="transparentBg" type="checkbox"><span></span>透明底<i class="sub">仅 V5 模型</i></label>
               </div>
 
               <button class="btn btn-quiet btn-block btn-sm" id="resetAdv" type="button">
@@ -340,10 +341,12 @@
           <button class="btn btn-primary btn-go" id="goBtn" type="submit">
             <svg class="ico"><use href="#i-sparkle" /></svg>
             <span id="goLabel">生成 ×1</span>
+            <span class="cost-tag" id="goCost" hidden></span>
             <kbd>⌘↵</kbd>
           </button>
-          <button class="btn btn-quiet btn-block btn-sm" id="cancelBtn" type="button" hidden>
+          <button class="btn btn-cancel btn-block" id="cancelBtn" type="button" hidden>
             <svg class="ico"><use href="#i-stop" /></svg>取消
+            <span class="cost-tag" id="cancelCost" hidden></span>
           </button>
         </div>
       </form>
@@ -413,6 +416,7 @@
               <span class="result-param" id="resultScale" role="listitem"></span>
               <span class="result-param" id="resultCfg" role="listitem"></span>
               <span class="result-param" id="resultSampler" role="listitem"></span>
+              <span class="result-param" id="resultAlpha" role="listitem"></span>
             </div>
             <div class="result-actions" role="group" aria-label="图片操作">
               <button class="ibtn" id="reuseBtn" type="button" hidden data-tip="复用参数" aria-label="复用参数">

@@ -623,9 +623,74 @@ select option { background: var(--raised); }
 .btn-link:hover { color: var(--a); }
 .btn-link.centered { justify-self: center; }
 
-.btn-go { height: 44px; font-size: var(--fz-md); font-weight: var(--fw-semibold); }
+/* ── Generate: the one purchase button on the page ──────────────
+   A flat accent fill reads as a sticker next to surfaces that all carry
+   lips and elevation. This is the control that spends the user's quota,
+   so it gets the full physical treatment the rest of the chrome earns
+   more quietly: a vertical gradient (lit from above like every panel),
+   an inset top lip, and an accent-tinted drop that couples it to the
+   page's light model instead of floating over it. */
+.btn-go {
+  height: 46px;
+  font-size: var(--fz-md); font-weight: var(--fw-semibold);
+  border-radius: var(--r3);
+  background: linear-gradient(to bottom, var(--a-hover), var(--a) 72%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 -1px 0 rgba(23, 19, 42, 0.22) inset,
+    0 2px 6px -2px rgba(0, 0, 0, 0.55),
+    0 12px 26px -12px rgba(179, 161, 255, 0.5);
+}
+.btn-go:hover {
+  background: linear-gradient(to bottom, #cbbeff, var(--a-hover) 72%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.38) inset,
+    0 -1px 0 rgba(23, 19, 42, 0.22) inset,
+    0 2px 6px -2px rgba(0, 0, 0, 0.55),
+    0 14px 30px -12px rgba(179, 161, 255, 0.62);
+}
+/* Press = travel down + shadow collapse, not a generic shrink. */
+.btn-go:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 rgba(23, 19, 42, 0.18) inset,
+    0 6px 14px -10px rgba(179, 161, 255, 0.4);
+}
+.btn-go:disabled {
+  background: var(--raised);
+  box-shadow: var(--sh-lip);
+  transform: none;
+}
 .btn-go kbd { background: rgba(23, 19, 42, 0.16); border-color: transparent; color: rgba(23, 19, 42, 0.66); }
 .btn-primary:disabled kbd { opacity: 0.4; }
+
+/* Price rides inside the action that spends it. Mono + tabular so the
+   figure stays put while the count changes. */
+.cost-tag {
+  font: var(--fw-semibold) var(--fz-2xs)/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(23, 19, 42, 0.18);
+  color: rgba(23, 19, 42, 0.78);
+}
+.btn-go:disabled .cost-tag { background: var(--well); color: var(--fg-4); }
+
+/* Cancel appears only while money is burning: same footprint family as the
+   generate button (full width, real height), quiet until hovered, then it
+   names its consequence in the error hue. */
+.btn-cancel {
+  height: 40px;
+  color: var(--fg-2);
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-lip);
+}
+.btn-cancel:hover { color: var(--err); background: var(--err-dim); border-color: rgba(232, 135, 135, 0.38); }
+.btn-cancel .cost-tag { background: var(--a-dim); color: var(--a); }
+.btn-cancel:hover .cost-tag { background: var(--err-dim); color: var(--err); }
 
 /* ── Danbooru Tag autocomplete ─────────────────────────────── */
 .tag-suggest {
@@ -721,6 +786,8 @@ select option { background: var(--raised); }
 .check input:checked + span { background: var(--a); border-color: var(--a); }
 .check input:checked + span::after { opacity: 1; transform: none; }
 .check input:focus-visible + span { outline: 2px solid var(--a); outline-offset: 2px; }
+.check:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+.check:has(input:disabled):hover { color: var(--fg-2); }
 .switches { display: grid; gap: 9px; }
 
 /* ── Segmented ───────────────────────────────────────────────── */

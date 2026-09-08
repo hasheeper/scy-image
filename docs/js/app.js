@@ -30,10 +30,14 @@ const GENERATION_LOCK = "scylla-image-generation-v1";
 const QUOTA_TTL = 60_000;
 const BATCH_HINT = "严格逐张请求；失败或取消时停止剩余队列。";
 
+/* Injected silently at request time when the 透明底 switch is on; the tag
+   never appears in the textarea. Alpha output is a V5-only capability. */
+const TRANSPARENT_BG_TAG = "transparent background";
+
 const DEFAULTS = {
   sampler: "k_euler_ancestral",
   steps: 25, scale: 5, cfg: 10,
-  batchCount: 1, optimize: false, serverCache: false,
+  batchCount: 1, optimize: false, serverCache: false, transparentBg: false,
   localCache: true, historyLimit: 25
 };
 
@@ -206,7 +210,32 @@ function syncModelHint() {
   // inline by validateSize() instead of a separate line of prose.
   const m = activeModel();
   $("model").title = m ? [m.description, `上限 ${(m.maxPixels / 1e6).toFixed(2)}M 像素`].filter(Boolean).join(" · ") : "";
+  syncTransparentBg();
   validateSize();
+}
+
+/* ── transparent background (V5 only) ──────────────────────────
+   Upstream alpha output exists only on the V5 family; the switch stays
+   visible but inert on older models so its state survives model hopping. */
+function transparentBgSupported() {
+  return ($("model").value || "").startsWith("nai-diffusion-5");
+}
+
+function transparentBgActive() {
+  return $("transparentBg").checked && transparentBgSupported();
+}
+
+function syncTransparentBg() {
+  const ok = transparentBgSupported();
+  $("transparentBg").disabled = !ok;
+  $("transparentBgWrap").dataset.off = ok ? "" : "1";
+  $("transparentBgWrap").title = ok ? "" : "当前模型不支持透明底（仅 V5）";
+}
+
+function injectTransparentBg(prompt) {
+  /* Skip when the user already asked for it themselves, weighted or not. */
+  if (/transparent background/i.test(prompt)) return prompt;
+  return prompt ? `${TRANSPARENT_BG_TAG}, ${prompt}` : TRANSPARENT_BG_TAG;
 }
 
 function renderRatios() {
@@ -336,6 +365,7 @@ function syncAdvBadge() {
   if (batchCount() !== DEFAULTS.batchCount) n += 1;
   if ($("optimize").checked !== DEFAULTS.optimize) n += 1;
   if ($("serverCache").checked !== DEFAULTS.serverCache) n += 1;
+  if ($("transparentBg").checked !== DEFAULTS.transparentBg) n += 1;
 
   const badge = $("advBadge");
   badge.hidden = n === 0;
@@ -383,8 +413,35 @@ function commitBatchCount() {
   return batchCount();
 }
 
+/* Units per image, derived from the quota itself (rpd vs rpd_units) rather
+   than hardcoding 10 — the upstream is free to reprice. Null while unknown. */
+function unitCostPerImage() {
+  const rpd = Number(quotaStatus?.temporary?.limit);
+  const units = Number(quotaStatus?.temporary?.unitsLimit);
+  if (Number.isFinite(rpd) && rpd > 0 && Number.isFinite(units) && units > 0) {
+    return units / rpd;
+  }
+  return null;
+}
+
+function costText(images) {
+  const rate = unitCostPerImage();
+  if (rate === null || !Number.isFinite(images) || images <= 0) return "";
+  return `−${Math.round(images * rate)} 点`;
+}
+
+/* The cost tag rides inside the button: price next to the action it buys.
+   It vanishes rather than guesses when the quota is not known yet. */
+function setCostTag(id, text) {
+  const el = $(id);
+  el.hidden = !text;
+  el.textContent = text || "";
+}
+
 function syncGenerateLabel() {
-  if (!jobActive) $("goLabel").textContent = `生成 ×${batchCount()}`;
+  if (jobActive) return;
+  $("goLabel").textContent = `生成 ×${batchCount()}`;
+  setCostTag("goCost", costText(batchCount()));
 }
 
 function normalizedHistoryLimit(value) {
@@ -572,6 +629,7 @@ function persist() {
     seed: $("seed").value,
     batchCount: requestedBatchCount,
     optimize: $("optimize").checked, serverCache: $("serverCache").checked,
+    transparentBg: $("transparentBg").checked,
     localCache: $("localCache").checked,
     historyLimit: requestedHistoryLimit
   });
@@ -597,6 +655,7 @@ function restore() {
   setRequestedBatchCount(s.batchCount ?? requestedBatchCount);
   $("optimize").checked = s.optimize ?? DEFAULTS.optimize;
   $("serverCache").checked = s.serverCache ?? DEFAULTS.serverCache;
+  $("transparentBg").checked = s.transparentBg ?? DEFAULTS.transparentBg;
   $("localCache").checked = s.localCache ?? DEFAULTS.localCache;
   requestedHistoryLimit = normalizedHistoryLimit(s.historyLimit ?? DEFAULTS.historyLimit);
   syncHistoryPolicy();
@@ -754,6 +813,7 @@ function renderResultInfo(item) {
   setResultParam("resultScale", params.scale != null ? `Scale ${params.scale}` : "");
   setResultParam("resultCfg", params.cfg != null ? `CFG ${params.cfg}` : "");
   setResultParam("resultSampler", sampler);
+  setResultParam("resultAlpha", params.transparentBg ? "透明底" : "");
 }
 
 function showEntry(item, { viaUser = false } = {}) {
@@ -791,8 +851,15 @@ function collect() {
     ? randomSeed()
     : Math.min(4_294_967_295, Math.max(0, Math.floor(Number(raw))));
 
+  const basePrompt = $("prompt").value.trim();
+  const transparentBg = transparentBgActive();
+
   return {
-    prompt: $("prompt").value.trim(),
+    /* `prompt` is the wire value; `basePrompt` keeps the user's own words so
+       复用/复制/导入 never leak the silently injected tag back into the box. */
+    prompt: transparentBg ? injectTransparentBg(basePrompt) : basePrompt,
+    basePrompt,
+    transparentBg,
     negative_prompt: $("negative").value.trim(),
     model: model?.id,
     modelName: model?.name,
@@ -986,8 +1053,14 @@ function startTimer() {
 
 function setBusy(on) {
   $("goBtn").disabled = on;
-  if (on) $("goLabel").textContent = `准备 ×${batchCount()}`;
-  else syncGenerateLabel();
+  if (on) {
+    $("goLabel").textContent = `准备 ×${batchCount()}`;
+    setCostTag("goCost", "");
+    setCostTag("cancelCost", costText(batchCount()));
+  } else {
+    syncGenerateLabel();
+    setCostTag("cancelCost", "");
+  }
   $("cancelBtn").hidden = !on;
   $("form").setAttribute("aria-busy", String(on));
   if (on) for (const id of ["saveBtn", "reuseBtn", "copyBtn"]) $(id).hidden = true;
@@ -1020,6 +1093,9 @@ async function runBatch(base) {
       controller = new AbortController();
       setState("busy");
       $("goLabel").textContent = `剩余 ×${total - index}`;
+      /* Cancelling refunds nothing already spent; the tag prices what is
+         still uncommitted, so it counts down with the queue. */
+      setCostTag("cancelCost", costText(total - index));
       $("stageTitle").textContent = total > 1 ? `串行生成 · 剩余 ×${total - index}` : "生成中";
       $("stageSub").textContent = completed ? `已完成 ${completed}/${total}` : "";
       $("busyNote").textContent = [
@@ -1070,6 +1146,8 @@ async function runBatch(base) {
 
     if (total > 1) {
       $("goLabel").textContent = "合成对比图…";
+      /* All requests are in; aborting now spends nothing either way. */
+      setCostTag("cancelCost", "");
       $("stageTitle").textContent = "正在整理批次";
       $("stageSub").textContent = `已完成 ${completed}/${total}`;
       $("busyNote").textContent = "图片已全部生成 · 正在本地合成对比图";
@@ -1144,6 +1222,7 @@ async function run() {
   quotaPreflightActive = true;
   $("goBtn").disabled = true;
   $("goLabel").textContent = "检查额度…";
+  setCostTag("goCost", "");
   try {
     await refreshQuota({ force: true, announce: true });
   } finally {
@@ -1303,6 +1382,10 @@ for (const id of ["steps", "scale", "cfg"]) {
 for (const id of ["optimize", "serverCache"]) {
   $(id).addEventListener("change", () => { syncAdvBadge(); persist(); });
 }
+$("transparentBg").addEventListener("change", (e) => {
+  syncAdvBadge(); persist();
+  if (e.target.checked) toast("生成时将自动加入 transparent background", "ok");
+});
 $("localCache").addEventListener("change", () => {
   syncHistoryPolicy({ rerender: true });
   persist();
@@ -1342,6 +1425,7 @@ $("resetAdv").addEventListener("click", () => {
   setRequestedBatchCount(DEFAULTS.batchCount);
   $("optimize").checked = DEFAULTS.optimize;
   $("serverCache").checked = DEFAULTS.serverCache;
+  $("transparentBg").checked = DEFAULTS.transparentBg;
   syncRangeLabels(); syncAdvBadge(); syncGenerateLabel(); persist();
 });
 
@@ -1356,7 +1440,7 @@ $("saveBtn").addEventListener("click", () => {
 $("copyBtn").addEventListener("click", async () => {
   if (!current?.params?.prompt) return;
   try {
-    await navigator.clipboard.writeText(current.params.prompt);
+    await navigator.clipboard.writeText(current.params.basePrompt ?? current.params.prompt);
     toast("Tag 已复制", "ok");
   } catch {
     toast("浏览器拒绝了剪贴板访问");
@@ -1417,7 +1501,7 @@ $("reuseBtn").addEventListener("click", () => {
   if (!current?.params) return;
   const p = current.params;
   applyParams({
-    prompt: p.prompt || "",
+    prompt: p.basePrompt ?? p.prompt ?? "",
     negative_prompt: p.negative_prompt || "",
     model: p.model,
     width: p.width,
@@ -1728,7 +1812,7 @@ window.addEventListener("drop", (e) => {
     name: p.modelName || "历史记录",
     dialect: "本次会话",
     fields: {
-      prompt: p.prompt || "",
+      prompt: p.basePrompt ?? p.prompt ?? "",
       negative_prompt: p.negative_prompt || "",
       model: p.model,
       width: p.width,
