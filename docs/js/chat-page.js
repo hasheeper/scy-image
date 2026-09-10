@@ -12,6 +12,7 @@ const conversations = [];
 let current, catalog, models = [], media = null, ready = false, busy = null, uploading = 0;
 let quote = null, quoteSequence = 0, quoteTimer, quoteController, toastTimer;
 const nodes = new Map();
+const narrowLayout = matchMedia("(max-width: 860px)");
 function collectAssets() { if (!busy && !uploading) assets.collect(conversations); }
 const labels = { quality: "质量", size: "画幅", aspect_ratio: "比例", image_size: "分辨率", output_format: "格式" };
 const valueLabels = { auto: "自动", low: "草稿", medium: "标准", high: "高质量", xhigh: "超高", max: "最高",
@@ -51,7 +52,12 @@ function setSidebar(open) {
   $("sidebarBackdrop").hidden = !open;
   $("menuButton").setAttribute("aria-expanded", String(open));
   document.querySelector(".chat-workspace").inert = open;
-  if (open) $("newConversation").focus(); else $("menuButton").focus();
+  if (open || !narrowLayout.matches) $("newConversation").focus(); else $("menuButton").focus();
+}
+function placeToolbar() {
+  if (!narrowLayout.matches && document.body.dataset.sidebar === "open") setSidebar(false);
+  const target = $(narrowLayout.matches ? "chatToolsSlot" : "chatToolbarHost");
+  target.prepend($("chatTopbarActions"));
 }
 function updateList() {
   $("conversationList").replaceChildren(...conversations.map(c => {
@@ -461,6 +467,9 @@ $("resetContext").onclick = () => {
 $("quotaButton").onclick = () => { renderQuota(); $("quotaDialog").showModal(); void refreshQuota(); };
 $("menuButton").onclick = () => setSidebar(document.body.dataset.sidebar !== "open");
 $("closeSidebar").onclick = $("sidebarBackdrop").onclick = () => setSidebar(false);
+$("chatTopbarActions").addEventListener("click", e => {
+  if (e.target.closest("a,button") && document.body.dataset.sidebar === "open") setSidebar(false);
+}, { capture: true });
 $("latestButton").onclick = scrollLatest;
 $("chatScroll").onscroll = () => { if (nearBottom()) $("latestButton").hidden = true; };
 $("closeImage").onclick = () => $("imageDialog").close();
@@ -502,7 +511,8 @@ document.addEventListener("keydown", e => {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 });
-matchMedia("(max-width: 860px)").addEventListener("change", e => { if (!e.matches && document.body.dataset.sidebar === "open") setSidebar(false); });
+narrowLayout.addEventListener("change", placeToolbar);
+placeToolbar();
 function viewport() {
   const visual = window.visualViewport;
   document.documentElement.style.setProperty("--visible-height", `${visual?.height || innerHeight}px`);

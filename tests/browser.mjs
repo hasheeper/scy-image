@@ -26,6 +26,17 @@ async function send(prompt, count) {
 try {
   await page.goto(origin + "/chat.html");
   await page.waitForFunction(() => document.querySelectorAll("#chatModel option").length === 4);
+  assert.equal(await page.locator(".topbar #chatTopbarActions .ibtn").count(), 3);
+  assert.equal((await page.locator("#chatTopbarActions").innerText()).trim(), "");
+  assert.equal(await page.locator("#chatSidebar #keyButton, .sidebar-tools, .sidebar-note").count(), 0);
+  assert.equal(await page.getByRole("link", { name: "打开 NAI 绘图", exact: true }).getAttribute("href"), "./index.html");
+  assert.equal(await page.locator("#keyButton").evaluate(n => getComputedStyle(n).width), "34px");
+  await page.locator("#keyButton").click();
+  assert.equal(await page.locator("#keyDialog").isVisible(), true);
+  await page.locator("#closeKey").click();
+  page.once("dialog", dialog => dialog.dismiss());
+  await page.locator("#deleteConversation").click();
+  assert.equal(await page.locator(".conversation-item").count(), 1);
   assert.equal((await page.locator("#sendButton").innerText()).trim(), "");
   assert.match(await page.locator("#sendButton use").getAttribute("href"), /#i-send$/);
   assert.ok(await page.getByRole("button", { name: "发送绘图请求", exact: true }).count());
@@ -116,6 +127,8 @@ try {
     await page.setViewportSize({ width, height: 844 });
     await page.waitForFunction(() => document.getElementById("chatApp").getBoundingClientRect().height <= innerHeight + 1);
     await page.locator("#chatSidebar").waitFor({ state: "hidden" });
+    assert.equal(await page.locator("#chatToolsSlot #chatTopbarActions").count(), 1);
+    assert.equal(await page.locator("#chatTopbarActions").isVisible(), false);
     const metrics = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
       bottom: document.getElementById("chatForm").getBoundingClientRect().bottom,
       imageArea: document.getElementById("chatScroll").clientHeight }));
@@ -125,9 +138,23 @@ try {
     await screenshot(`mobile-${width}`);
     await page.locator("#menuButton").click();
     assert.equal(await page.locator(".chat-workspace").evaluate(n => n.inert), true);
+    await page.locator("#keyButton").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#keyButton").isVisible(), true);
+    assert.equal(await page.locator("#keyButton").evaluate(n => getComputedStyle(n).width), "44px");
+    await screenshot(`mobile-tools-${width}`);
+    await page.locator("#keyButton").click();
+    assert.equal(await page.locator("#keyDialog").isVisible(), true);
+    assert.equal(await page.locator("#menuButton").getAttribute("aria-expanded"), "false");
+    assert.equal(await page.locator(".chat-workspace").evaluate(n => n.inert), false);
+    await page.locator("#closeKey").click();
+    await page.locator("#menuButton").click();
     await page.locator("#closeSidebar").click();
     await page.locator("#chatSidebar").waitFor({ state: "hidden" });
   }
+  await page.setViewportSize({ width: 1360, height: 950 });
+  await page.waitForFunction(() => !!document.querySelector(".topbar #chatTopbarActions"));
+  assert.equal(await page.locator("#chatToolsSlot .ibtn").count(), 0);
+  assert.equal(await page.locator("#keyButton").isVisible(), true);
   await page.setViewportSize({ width: 390, height: 430 });
   await page.locator("#chatPrompt").focus();
   assert.ok((await page.locator("#chatForm").boundingBox()).y >= 0);

@@ -19,21 +19,22 @@
     <header class="topbar">
       <div class="brand"><img class="brand-mark" src="./assets/scylla-icon-small.png" width="30" height="30" alt=""><span class="brand-wordmark"><span class="brand-title">Scylla</span><span class="brand-subtitle">IMAGE</span></span></div>
       <div class="meters" id="chatMeters"><button type="button" class="meter" id="quotaButton" aria-label="查看媒体额度"><svg class="ico meter-icon" aria-hidden="true"><use href="./assets/icons.svg#i-points" /></svg><span class="meter-k" id="quotaKind">FREE</span><span class="meter-v"><b id="quotaLeft">—</b><i id="quotaTotal"></i></span><span class="meter-bar"><i id="quotaFill"></i></span></button></div>
-      <span class="workspace-label">对话绘图</span>
-      <button class="ibtn chat-menu" id="menuButton" type="button" aria-label="打开会话与工具" aria-expanded="false" aria-controls="chatSidebar"><svg class="ico"><use href="./assets/icons.svg#i-menu" /></svg></button>
+      <div class="topbar-menu" id="chatToolbarHost">
+        <div class="topbar-end" id="chatTopbarActions" role="group" aria-label="工具">
+          <a href="./index.html" target="_blank" rel="noopener" class="ibtn" data-tip="NAI 绘图" aria-label="打开 NAI 绘图"><svg class="ico solid" aria-hidden="true"><use href="./assets/icons.svg#i-parameters" /></svg></a>
+          <button type="button" class="ibtn" id="keyButton" data-tip="API Key" aria-label="API Key"><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-lock" /></svg></button>
+          <button type="button" class="ibtn" id="deleteConversation" data-tip="删除当前对话" aria-label="删除当前对话"><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-trash" /></svg></button>
+        </div>
+        <button class="ibtn chat-menu" id="menuButton" type="button" aria-label="打开会话与工具" aria-expanded="false" aria-controls="chatSidebar"><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-menu" /></svg></button>
+      </div>
     </header>
     <div class="chat-layout">
       <button id="sidebarBackdrop" class="chat-sidebar-backdrop" type="button" aria-label="关闭侧栏" hidden></button>
       <aside class="chat-sidebar" id="chatSidebar" aria-label="会话与工具">
         <div class="sidebar-heading"><span>对话绘图</span><button type="button" class="ibtn sidebar-close" id="closeSidebar" aria-label="关闭侧栏"><svg class="ico"><use href="./assets/icons.svg#i-close" /></svg></button></div>
+        <div class="chat-tools-slot" id="chatToolsSlot"></div>
         <button class="btn btn-quiet new-conversation" id="newConversation" type="button"><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-plus" /></svg>新对话</button>
         <nav id="conversationList" class="conversation-list" aria-label="会话列表"></nav>
-        <div class="sidebar-tools">
-          <a href="./index.html" target="_blank" rel="noopener" class="btn btn-quiet"><svg class="ico solid" aria-hidden="true"><use href="./assets/icons.svg#i-parameters" /></svg>NAI 绘图</a>
-          <button type="button" class="btn btn-quiet" id="keyButton"><svg class="ico"><use href="./assets/icons.svg#i-lock" /></svg>API Key</button>
-          <button type="button" class="btn btn-quiet" id="deleteConversation"><svg class="ico"><use href="./assets/icons.svg#i-trash" /></svg>删除当前对话</button>
-          <p class="sidebar-note">本次会话保留 · 刷新后清空</p>
-        </div>
       </aside>
       <main class="chat-workspace">
         <div class="chat-scroll" id="chatScroll" tabindex="0" aria-label="绘图消息">
