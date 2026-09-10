@@ -41,10 +41,14 @@ try {
   assert.equal(mock.state.records[0].payload.max_cost, 0);
   mock.state.delay = 60;
   await send("改成蓝色", 2);
+  assert.equal(await page.locator(".turn-header").count(), 0);
+  assert.equal(await page.getByText(/基于第.*轮/).count(), 0);
+  assert.equal(await page.locator(".chat-meta .result-name, .chat-meta .result-param").count(), 0);
   assert.equal(mock.state.records[1].path, "/v1/image/tools/run");
   assert.match(mock.state.records[1].payload.prompt, /画一只窗边的猫\n保留柔和光线/);
   assert.ok(mock.state.records[1].payload.init_image.startsWith("data:image/png;base64,"));
   await page.getByRole("button", { name: "继续编辑这张图", exact: true }).first().click();
+  assert.equal(await page.getByText("已选为主图，接着输入修改要求", { exact: true }).count(), 0);
   await page.locator("#imageUpload").setInputFiles({ name: "参考.png", mimeType: "image/png", buffer: png(64, 80) });
   await page.waitForFunction(() => document.querySelectorAll(".attachment").length === 2);
   assert.equal((await page.locator("#attachmentList").innerText()).trim(), "");

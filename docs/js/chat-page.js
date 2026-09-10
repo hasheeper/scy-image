@@ -180,17 +180,16 @@ function previewShape(turn) {
 function renderTurn(c, turn) {
   const version = turn.versions[turn.selectedVersion];
   const root = el("article", { class: "chat-turn", "data-turn": turn.id });
-  const header = el("div", { class: "turn-header" });
-  header.append(el("strong", {}, "你"));
-  if (turn.parentId) header.append(el("span", {}, `基于第 ${c.turns.findIndex(t => t.id === turn.parentId) + 1} 轮`));
+  const input = el("div", { class: "turn-input" });
+  input.append(el("div", { class: "turn-prompt" }, turn.prompt));
   if (turn.versions.length > 1) {
     const versions = el("select", { class: "version-select", "aria-label": "查看生成版本" });
     turn.versions.forEach((v, i) => versions.append(el("option", { value: i }, `版本 ${i + 1}${v.status === "pending" ? " · 生成中" : v.status !== "done" ? " · 未完成" : ""}`)));
     versions.value = turn.selectedVersion;
     versions.onchange = () => { turn.selectedVersion = Number(versions.value); c.selectionRevision += 1; renderMessages(); };
-    header.append(versions);
+    input.append(versions);
   }
-  root.append(header, el("div", { class: "turn-prompt" }, turn.prompt));
+  root.append(input);
   if (turn.snapshot.imageIds.length) {
     const refs = el("div", { class: "turn-references" });
     for (const id of turn.snapshot.imageIds) {
@@ -207,7 +206,7 @@ function renderTurn(c, turn) {
     frame.style.setProperty("--pending-width", `${560 * Math.min(previewShape(turn), 1)}px`);
     const bar = el("div", { class: "bar" }); bar.append(el("i"));
     frame.append(bar, el("div", { class: "sheen" }));
-    output.append(frame, el("p", { class: "turn-phase", "data-phase": version.id }, busy?.phase || "生成中"));
+    output.append(frame);
   } else if (version.status !== "done") {
     const failure = el("div", { class: "turn-error" });
     failure.append(el("p", {}, version.error || "已取消；上游可能仍在处理，请勿立即重复提交。"));
@@ -224,20 +223,22 @@ function renderTurn(c, turn) {
       frame.append(img);
       const resultName = `Scylla-${c.turns.indexOf(turn) + 1}-v${turn.versions.indexOf(version) + 1}`;
       const meta = el("footer", { class: "chat-meta" });
-      meta.append(el("strong", { class: "result-name" }, resultName), el("span", { class: "result-model" }, models.find(m => m.id === turn.settings.model)?.name || turn.settings.model));
-      const bottom = el("div", { class: "chat-meta-bottom" }), params = el("div", { class: "result-params mono" });
-      params.append(el("span", { class: "result-param" }, `${asset.width}×${asset.height}`));
-      if (turn.settings.options.quality) params.append(el("span", { class: "result-param" }, valueLabels[turn.settings.options.quality] || turn.settings.options.quality));
-      params.append(el("span", { class: "result-param" }, quoteLabel(version.quote)));
+      const summary = el("div", { class: "chat-meta-summary" });
+      const modelName = models.find(m => m.id === turn.settings.model)?.name || turn.settings.model;
+      summary.append(el("span", { class: "result-model", title: modelName }, modelName),
+        el("span", { class: "chat-dimensions mono" }, `${asset.width}×${asset.height}`));
+      meta.append(summary);
+      const bottom = el("div", { class: "chat-meta-bottom" });
+      if (version.quote?.cost > 0) bottom.append(el("span", { class: "chat-cost mono" }, quoteLabel(version.quote)));
       const actions = el("div", { class: "result-actions" });
       const download = el("a", { class: "ibtn", href: asset.url, download: `${resultName}.${asset.blob.type.split("/")[1]}`, "aria-label": "下载图片", title: "下载图片" }); download.append(icon("download"));
       actions.append(download, action("继续编辑这张图", "reuse", () => {
-        selectSource(current, turn, asset.id); renderAttachments(); scheduleQuote(); $("chatPrompt").focus(); toast("已选为主图，接着输入修改要求");
+        selectSource(current, turn, asset.id); renderAttachments(); scheduleQuote(); $("chatPrompt").focus();
       }), action("添加为参考图", "image", () => {
         if (!imageIds().includes(asset.id)) current.attachments.push(asset.id);
         changedContext();
       }), action("重新生成此版本", "retry", () => execute(turn)));
-      bottom.append(params, actions); meta.append(bottom);
+      bottom.append(actions); meta.append(bottom);
       const result = el("div", { class: "chat-result" });
       result.style.setProperty("--image-width", `${asset.width}px`);
       result.style.setProperty("--image-ratio", asset.width / asset.height);
@@ -334,7 +335,6 @@ async function execute(existingTurn) {
         }, onLoading: () => {
           if (!busy) return;
           busy.phase = "图片加载中"; syncAction();
-          const phase = document.querySelector(`[data-phase="${version.id}"]`); if (phase) phase.textContent = busy.phase;
         }
       });
       const blocks = [];
@@ -425,7 +425,6 @@ $("chatModel").onchange = () => {
   const model = models.find(m => m.id === $("chatModel").value);
   const before = current.settings.options;
   current.settings = { model: model.id, options: normalizeOptions(model, before) };
-  if (Object.keys(before).some(k => current.settings.options[k] !== before[k])) toast("已按新模型调整可用参数");
   persistSettings(); renderOptions(); scheduleQuote();
 };
 $("newConversation").onclick = addConversation;

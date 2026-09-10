@@ -26,8 +26,8 @@
 .message-list { max-width: 1080px; margin: 0 auto; padding: var(--sp-5) var(--sp-6) var(--sp-6); display: grid; gap: var(--sp-7); }
 .message-list:empty { display: none; }
 .chat-turn { min-width: 0; display: grid; gap: var(--sp-4); }
-.turn-header { display: flex; align-items: center; gap: 12px; color: var(--fg-3); font-size: var(--fz-xs); }
-.turn-header strong { color: var(--fg-2); font-weight: var(--fw-medium); }
+.turn-input { display: flex; align-items: flex-start; gap: 12px; }
+.turn-input .turn-prompt { flex: 1; min-width: 0; }
 .turn-prompt { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fz-md); line-height: 1.75; color: var(--fg); }
 .turn-references { display: flex; gap: 8px; overflow: auto; }
 .turn-references img { display: block; width: 48px; height: 48px; object-fit: contain; background: var(--well); border-radius: var(--r2); }
@@ -37,13 +37,15 @@
 .chat-page .chat-print[data-new="true"] { animation: printIn var(--t3) var(--e-out); }
 .chat-page .chat-print img { width: 100%; height: auto; max-width: 100%; max-height: min(76dvh, 960px); object-fit: contain; }
 .chat-page .chat-pending { width: min(100%, var(--pending-width, 560px), calc(70dvh * var(--pending-ratio, 1))); height: auto; aspect-ratio: var(--pending-ratio, 1); justify-self: start; }
-.turn-phase { color: var(--fg-3); font-size: var(--fz-xs); }
 .turn-error { padding: 16px; border: 1px solid var(--line-2); border-radius: var(--r3); color: var(--err); display: grid; gap: 12px; overflow-wrap: anywhere; }
 .turn-error .btn { justify-self: start; }
 .chat-meta { display: grid; gap: 4px; }
+.chat-meta-summary { display: flex; align-items: center; gap: 12px; }
+.chat-meta-summary .result-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-dimensions, .chat-cost { flex: none; color: var(--fg-3); font-size: var(--fz-2xs); }
+.chat-dimensions { margin-left: auto; }
 .chat-meta-bottom { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.chat-meta .result-params { flex: 1; }
-.chat-meta .result-param { border: none; padding: 4px 6px; }
+.chat-meta .result-actions { margin-left: auto; }
 .chat-meta .result-actions .ibtn { width: 32px; height: 32px; background: transparent; border-color: transparent; }
 .chat-meta .result-actions .ibtn:hover { background: var(--raised); }
 .version-select { width: auto; max-width: 180px; margin-left: auto; font-size: var(--fz-xs); padding: 3px 6px; }
@@ -100,6 +102,7 @@
 .chat-lightbox img { display: block; max-width: calc(100vw - 24px); max-height: calc(100dvh - 64px); object-fit: contain; }
 .chat-lightbox .ibtn { display: grid; margin-left: auto; margin-bottom: 8px; background: var(--raised); }
 .latest-button { position: absolute; bottom: calc(var(--composer-height, 180px) + 32px); right: 24px; z-index: 2; background: var(--raised); border: 1px solid var(--line-2); box-shadow: var(--sh-1); }
+.latest-button .ico { transform: rotate(180deg); }
 .chat-toast { position: fixed; bottom: calc(var(--composer-height, 180px) + 48px); left: 50%; transform: translateX(-50%); max-width: min(480px, calc(100% - 32px)); padding: 12px 16px; border: 1px solid var(--line-2); border-radius: var(--r3); background: var(--raised); color: var(--fg); box-shadow: var(--sh-2); z-index: var(--z-toast); }
 @media (max-width: 1200px) { .quick-options { display: none; } }
 @media (max-width: 860px) {
