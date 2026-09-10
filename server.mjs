@@ -1,292 +1,139 @@
-/**
- * Optional local dev server.
- *
- * Serves docs/ and, when config/api-key.txt is filled in, proxies the API so
- * the token never reaches the browser. The site also runs as a pure static
- * bundle (GitHub Pages) where the browser talks to the upstream directly —
- * this file is a convenience for local use, not a requirement.
- */
-
+/** Optional localhost proxy. Tokens never enter the browser in this mode. */
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeCatalog, validatePayload, MAX_REQUEST_BYTES } from "./docs/js/model-catalog.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, "docs");
 const KEY_FILE = path.join(ROOT, "config", "api-key.txt");
-const UPSTREAM = "https://proxy.scylla.love";
-const PORT = Number.parseInt(process.env.PORT || "3215", 10);
-const HOST = "127.0.0.1";
-
-/* One upstream image request at a time per local server process. Scylla does
-   not publish a concurrency contract, and running the same key in parallel
-   can otherwise happen through two tabs or API clients. The browser also has
-   an origin-scoped Web Lock; this is the final guard for proxy mode. */
-let generationActive = false;
-
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".woff2": "font/woff2",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".ico": "image/x-icon"
-};
-
+const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml",
+  ".woff2": "font/woff2", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon" };
 function json(res, status, data) {
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
-  });
+  if (res.destroyed || res.writableEnded) return;
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   res.end(JSON.stringify(data));
 }
-
-async function readToken() {
+async function readTokenFile() {
   const raw = (await readFile(KEY_FILE, "utf8")).trim();
   const token = raw.includes("=") ? raw.slice(raw.indexOf("=") + 1).trim() : raw;
-  if (!token || token === "YOUR_TOKEN") throw new Error("请在 config/api-key.txt 填写 API Token");
+  if (!token || token === "YOUR_TOKEN") throw new Error("请在 config/api-key.txt 填写 API Key");
   return token;
 }
-
-function readBody(req) {
+function readBody(req, limit) {
   return new Promise((resolve, reject) => {
-    let text = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk) => {
-      text += chunk;
-      if (text.length > 1_000_000) {
-        reject(new Error("请求内容过大"));
-        req.destroy();
-      }
+    let size = 0, chunks = [], failed = false;
+    req.on("data", chunk => {
+      if (failed) return;
+      size += chunk.length;
+      if (size > limit) { failed = true; chunks = []; reject(Object.assign(new Error("请求内容过大"), { status: 413 })); }
+      else chunks.push(chunk);
     });
     req.on("end", () => {
-      try { resolve(JSON.parse(text || "{}")); }
+      if (failed) return;
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
       catch { reject(new Error("请求 JSON 无效")); }
     });
     req.on("error", reject);
+    req.on("aborted", () => reject(new Error("请求已断开")));
   });
 }
-
-function clamp(value, fallback, min, max, integer = false) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  const v = Math.min(max, Math.max(min, n));
-  return integer ? Math.round(v) : v;
-}
-
-/* NAI only. The upstream's Imagen models returned the "Generation Failed"
-   placeholder for every parameter shape tested, so they are not offered. */
-function buildPayload(input) {
-  const prompt = String(input.prompt || "").trim();
-
-  const model = String(input.model || "").trim();
-  if (!/^nai-[a-zA-Z0-9._-]{2,80}$/.test(model)) throw new Error("仅支持 NAI 模型");
-
-  const width = clamp(input.width, 832, 64, 2048, true);
-  const height = clamp(input.height, 1216, 64, 2048, true);
-  if (width * height > 1_048_576) throw new Error("分辨率超出模型上限（约 1.05M 像素）");
-
-  return {
-    prompt,
-    model,
-    width,
-    height,
-    steps: clamp(input.steps, 25, 1, 50, true),
-    sampler: String(input.sampler || "k_euler_ancestral"),
-    scale: clamp(input.scale, 5, 0, 20),
-    cfg: clamp(input.cfg, 10, 0, 30),
-    seed: clamp(input.seed, -1, -1, 4_294_967_295, true),
-    negative_prompt: String(input.negative_prompt || ""),
-    cache: input.cache === true,          // default: do not cache upstream
-    optimize: input.optimize === true,    // default: full-quality PNG
-    transform_prompt: false               // no prompt rewriting
-  };
-}
-
-async function proxyGenerate(req, res) {
-  if (generationActive) {
-    res.writeHead(429, {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
-      "Retry-After": "2"
-    });
-    res.end(JSON.stringify({ error: "已有生成任务正在进行，请等待完成后重试" }));
-    return;
+export function createAppServer({ upstream = "https://proxy.scylla.love", readToken = readTokenFile } = {}) {
+  let generationActive = false, catalogCache = null, catalogTime = 0;
+  const get = async (route, token, signal) => fetch(upstream + "/v1" + route,
+    { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal });
+  async function catalog(token) {
+    if (catalogCache && Date.now() - catalogTime < 60_000) return catalogCache;
+    const r = await get("/image/models", token, AbortSignal.timeout(10_000));
+    if (!r.ok) throw new Error("读取模型目录失败");
+    const data = await r.json();
+    if (data.studio_features?.max_cost !== true) throw new Error("上游不支持费用保护");
+    catalogCache = normalizeCatalog(data); catalogTime = Date.now();
+    return catalogCache;
   }
-
-  generationActive = true;
-  let controller = null;
-  try {
-    const [token, input] = await Promise.all([readToken(), readBody(req)]);
-    const payload = buildPayload(input);
-
-    controller = new AbortController();
-    req.once("aborted", () => controller?.abort());
-    res.once("close", () => {
-      if (!res.writableEnded) controller?.abort();
-    });
-    const timer = setTimeout(() => controller.abort(), 240_000);
-
-    let upstream;
+  return http.createServer(async (req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    // Reject cross-origin writes to the credential-holding localhost service.
+    const host = req.headers.host || "";
+    if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) return json(res, 403, { error: "Forbidden host" });
+    if (req.method === "POST" && (req.headers.origin && req.headers.origin !== `http://${host}`
+      || !req.headers["content-type"]?.startsWith("application/json"))) return json(res, 403, { error: "Forbidden origin or content type" });
     try {
-      upstream = await fetch(`${UPSTREAM}/v1/image/generate`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "image/png, image/jpeg, application/json"
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-    } finally {
-      clearTimeout(timer);
+      if (req.method === "GET" && url.pathname === "/api/status") {
+        let configured = false;
+        try { await readToken(); configured = true; } catch { /* Not configured. */ }
+        return json(res, 200, { proxy: true, configured, generationLock: true, generationBusy: generationActive });
+      }
+      if (req.method === "GET" && url.pathname === "/api/quota") {
+        const token = await readToken();
+        const statsUrl = new URL(upstream + "/v1/token_stats_data");
+        statsUrl.searchParams.set("api_key", token); statsUrl.searchParams.set("days", "1");
+        const parse = async r => { if (!r.ok) throw Error("额度暂不可用"); return r.json(); };
+        const [media, stats] = await Promise.allSettled([
+          get("/media/quota", token, AbortSignal.timeout(8_000)).then(parse),
+          fetch(statsUrl, { signal: AbortSignal.timeout(8_000) }).then(parse)
+        ]);
+        if (media.status !== "fulfilled" && stats.status !== "fulfilled") return json(res, 502, { error: "额度暂不可用" });
+        return json(res, 200, { media: media.status === "fulfilled" ? media.value : null,
+          stats: stats.status === "fulfilled" ? { temp_limits: stats.value.temp_limits } : null,
+          temporaryChecked: stats.status === "fulfilled" });
+      }
+      if (req.method === "GET" && ["/api/image/models", "/api/media/quota"].includes(url.pathname)) {
+        const response = await get(url.pathname.slice(4), await readToken(), AbortSignal.timeout(10_000));
+        return json(res, response.status, await response.json());
+      }
+      const posts = {
+        "/api/studio/image/estimate": ["/studio/image/estimate", false, false],
+        "/api/studio/image/generate": ["/studio/image/generate", false, true],
+        "/api/image/tools/estimate": ["/image/tools/estimate", true, false],
+        "/api/image/tools/run": ["/image/tools/run", true, true]
+      };
+      const route = posts[url.pathname];
+      if (req.method === "POST" && route) {
+        const [target, edit, execution] = route;
+        if (execution && generationActive) { res.setHeader("Retry-After", "2"); return json(res, 429, { error: "已有生成任务正在进行，请等待完成" }); }
+        if (execution) generationActive = true;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 240_000);
+        req.once("aborted", () => controller.abort());
+        res.once("close", () => { if (!res.writableEnded) controller.abort(); });
+        try {
+          const token = await readToken();
+          const input = await readBody(req, edit ? MAX_REQUEST_BYTES : 1_000_000);
+          const payload = validatePayload(input, await catalog(token), { edit, execution });
+          controller.signal.throwIfAborted();
+          const response = await fetch(upstream + "/v1" + target, {
+            method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(payload), signal: controller.signal
+          });
+          const body = Buffer.from(await response.arrayBuffer());
+          if (!res.destroyed) {
+            res.writeHead(response.status, { "Content-Type": response.headers.get("content-type") || "application/octet-stream",
+              "Content-Length": body.length, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+            res.end(body);
+          }
+        } finally { clearTimeout(timer); if (execution) generationActive = false; }
+        return;
+      }
+      if (url.pathname.startsWith("/api/")) return json(res, 404, { error: "Unknown API route" });
+      if (req.method !== "GET") return json(res, 405, { error: "Method not allowed" });
+      const requested = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname).replace(/^\/+/, "");
+      const file = path.resolve(PUBLIC_DIR, requested);
+      if (!file.startsWith(PUBLIC_DIR + path.sep)) return json(res, 403, { error: "Forbidden" });
+      try {
+        const bytes = await readFile(file);
+        res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream", "Cache-Control": "no-cache" });
+        res.end(bytes);
+      } catch { json(res, 404, { error: "Not found" }); }
+    } catch (error) {
+      json(res, error.status || (error.name === "AbortError" ? 504 : 400),
+        { error: error.name === "AbortError" ? "请求超时；上游可能仍在处理，请勿立即重复提交" : error.message || "请求失败" });
     }
-
-    const type = upstream.headers.get("content-type") || "application/octet-stream";
-    const data = Buffer.from(await upstream.arrayBuffer());
-
-    if (!type.startsWith("image/")) {
-      return json(res, upstream.ok ? 502 : upstream.status, {
-        error: "上游没有返回图片",
-        detail: data.toString("utf8").slice(0, 1000)
-      });
-    }
-
-    res.writeHead(upstream.status, {
-      "Content-Type": type,
-      "Content-Length": data.length,
-      "Cache-Control": "no-store"
-    });
-    res.end(data);
-  } catch (error) {
-    const message = error?.name === "AbortError" ? "生成超时，请稍后重试" : error.message;
-    if (!res.destroyed && !res.writableEnded) json(res, 400, { error: message || "生成失败" });
-  } finally {
-    generationActive = false;
-  }
+  });
 }
-
-async function proxyModels(res) {
-  try {
-    const token = await readToken();
-    const upstream = await fetch(`${UPSTREAM}/v1/image/models`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
-    });
-    const text = await upstream.text();
-    res.writeHead(upstream.status, {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store"
-    });
-    res.end(text);
-  } catch (error) {
-    json(res, 400, { error: error.message });
-  }
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const port = Number.parseInt(process.env.PORT || "3215", 10);
+  createAppServer().listen(port, "127.0.0.1", () => console.log(`Scylla Image → http://127.0.0.1:${port}`));
 }
-
-function quotaNumber(value) {
-  if (value === null || value === undefined || value === "") return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-async function fetchQuotaJson(url, options) {
-  const response = await fetch(url, options);
-  if (!response.ok) throw new Error(`upstream ${response.status}`);
-  return response.json();
-}
-
-async function proxyQuota(res) {
-  try {
-    const token = await readToken();
-    const statsUrl = new URL(`${UPSTREAM}/v1/token_stats_data`);
-    statsUrl.searchParams.set("days", "1");
-    statsUrl.searchParams.set("api_key", token);
-
-    const [imageResult, statsResult] = await Promise.allSettled([
-      fetchQuotaJson(`${UPSTREAM}/v1/image/quota`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        signal: AbortSignal.timeout(8_000)
-      }),
-      fetchQuotaJson(statsUrl, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(8_000)
-      })
-    ]);
-    const image = imageResult.status === "fulfilled" ? imageResult.value : null;
-    const temporary = statsResult.status === "fulfilled"
-      ? statsResult.value?.temp_limits
-      : null;
-    if (!image && !temporary) return json(res, 502, { error: "额度暂不可用" });
-
-    return json(res, 200, {
-      temporaryChecked: statsResult.status === "fulfilled",
-      image: image ? {
-        date: String(image.date || ""),
-        used: quotaNumber(image.used),
-        remaining: quotaNumber(image.remaining),
-        limit: quotaNumber(image.limit)
-      } : null,
-      temporary: temporary ? {
-        isTemp: temporary.is_temp === true,
-        limited: temporary.limited === true,
-        used: quotaNumber(temporary.rpd_used),
-        remaining: quotaNumber(temporary.rpd_remaining),
-        limit: quotaNumber(temporary.rpd),
-        resetSeconds: quotaNumber(temporary.reset_seconds)
-      } : null
-    });
-  } catch {
-    return json(res, 502, { error: "额度暂不可用" });
-  }
-}
-
-async function serveStatic(urlPath, res) {
-  const requested = urlPath === "/" ? "index.html" : urlPath.replace(/^\/+/, "");
-  const filePath = path.resolve(PUBLIC_DIR, requested);
-  if (filePath !== PUBLIC_DIR && !filePath.startsWith(`${PUBLIC_DIR}${path.sep}`)) {
-    return json(res, 403, { error: "Forbidden" });
-  }
-  try {
-    const data = await readFile(filePath);
-    res.writeHead(200, {
-      "Content-Type": MIME[path.extname(filePath)] || "application/octet-stream",
-      "Cache-Control": "no-cache"
-    });
-    res.end(data);
-  } catch {
-    json(res, 404, { error: "Not found" });
-  }
-}
-
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
-
-  // The `proxy` flag is what the client uses to pick its transport mode.
-  if (req.method === "GET" && url.pathname === "/api/status") {
-    let configured = false;
-    try { await readToken(); configured = true; } catch { /* not configured */ }
-    return json(res, 200, {
-      proxy: true,
-      configured,
-      generationLock: true,
-      generationBusy: generationActive
-    });
-  }
-
-  if (req.method === "GET" && url.pathname === "/api/image/models") return proxyModels(res);
-  if (req.method === "GET" && url.pathname === "/api/quota") return proxyQuota(res);
-  if (req.method === "POST" && url.pathname === "/api/image/generate") return proxyGenerate(req, res);
-  if (req.method === "GET") return serveStatic(url.pathname, res);
-
-  json(res, 405, { error: "Method not allowed" });
-});
-
-server.listen(PORT, HOST, () => {
-  console.log(`Scylla Image  →  http://${HOST}:${PORT}`);
-  console.log(`Key 文件      →  ${KEY_FILE}`);
-});

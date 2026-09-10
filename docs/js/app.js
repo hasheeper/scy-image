@@ -1,10 +1,13 @@
 import { vault } from "./vault.js";
-import { detectMode, fetchCatalog, fetchQuotaStatus, generate, state as api, DEFAULT_MODEL, FALLBACK_MAX_PIXELS } from "./api.js";
+import { detectMode, fetchCatalog, fetchQuotaStatus, generate, estimateNAI, state as api, DEFAULT_MODEL, FALLBACK_MAX_PIXELS } from "./api.js";
+import { resolveModel } from "./model-catalog.js";
+import { quoteLabel } from "./media-api.js";
+import { withGenerationLock } from "./generation-lock.js";
 import { history, prefs, makeThumb } from "./store.js";
 import { attach as attachHighlight } from "./highlight.js";
 import { attachTagAutocomplete } from "./tag-autocomplete.js";
 import { convertToNaiPrompt } from "./prompt-converter.js";
-import { quotaPolicy, recordSuccessfulImage } from "./quota-policy.js";
+import { quotaPolicy } from "./quota-policy.js";
 import { toast } from "./toast.js";
 import { takePendingTags } from "./tag-handoff.js";
 import { readImageParams } from "./image-meta.js";
@@ -26,7 +29,6 @@ const SNAP = 64;
 const DIM_MIN = 64;
 const DIM_MAX = 2048;
 const UINT32_RANGE = 4_294_967_296;
-const GENERATION_LOCK = "scylla-image-generation-v1";
 const QUOTA_TTL = 60_000;
 const BATCH_HINT = "严格逐张请求；失败或取消时停止剩余队列。";
 
@@ -64,6 +66,9 @@ let quotaFetchedAt = 0;
 let quotaRequest = null;
 let quotaResetTimer = null;
 let quotaLoading = false;
+let currentQuote = null;
+let quoteTimer = null;
+let quoteSequence = 0;
 let batchRestricted = false;
 let requestedBatchCount = DEFAULTS.batchCount;
 let requestedHistoryLimit = DEFAULTS.historyLimit;
@@ -186,8 +191,8 @@ function renderCatalog() {
     o.textContent = m.name;
     modelSel.append(o);
   }
-  const want = saved.model && catalog.models.some((m) => m.id === saved.model)
-    ? saved.model
+  const want = resolveModel(catalog.models, saved.model)?.id
+    ? resolveModel(catalog.models, saved.model).id
     : catalog.models.some((m) => m.id === DEFAULT_MODEL) ? DEFAULT_MODEL : catalog.models[0]?.id;
   if (want) modelSel.value = want;
 
@@ -282,6 +287,7 @@ function renderRatios() {
         validateSize();
         sizeSkeleton();
         persist();
+        scheduleQuote();
       });
     }
     host.append(btn);
@@ -325,6 +331,7 @@ function snapField(id) {
   validateSize();
   sizeSkeleton();
   persist();
+  scheduleQuote();
 }
 
 /* Over-budget requests come back as a 512x256 "Generation Failed" card
@@ -413,21 +420,26 @@ function commitBatchCount() {
   return batchCount();
 }
 
-/* Units per image, derived from the quota itself (rpd vs rpd_units) rather
-   than hardcoding 10 — the upstream is free to reprice. Null while unknown. */
-function unitCostPerImage() {
-  const rpd = Number(quotaStatus?.temporary?.limit);
-  const units = Number(quotaStatus?.temporary?.unitsLimit);
-  if (Number.isFinite(rpd) && rpd > 0 && Number.isFinite(units) && units > 0) {
-    return units / rpd;
-  }
-  return null;
+/* Only the server's price quote can name the cost of a generation. */
+function costText(images) {
+  return currentQuote && images > 0 ? quoteLabel(currentQuote, images) : "";
 }
 
-function costText(images) {
-  const rate = unitCostPerImage();
-  if (rate === null || !Number.isFinite(images) || images <= 0) return "";
-  return `−${Math.round(images * rate)}`;
+function scheduleQuote() {
+  clearTimeout(quoteTimer);
+  const sequence = ++quoteSequence;
+  currentQuote = null;
+  if (jobActive) return;
+  syncGenerateLabel();
+  quoteTimer = setTimeout(async () => {
+    try {
+      const quote = await estimateNAI(collect());
+      if (sequence !== quoteSequence || jobActive) return;
+      currentQuote = quote;
+      syncGenerateLabel();
+      syncMeters();
+    } catch { /* The submit path requires a fresh valid quote. Never guess. */ }
+  }, 650);
 }
 
 /* The cost tag rides inside the button: price next to the action it buys —
@@ -524,14 +536,18 @@ function paintMeter(node, leftEl, totalEl, fillEl, left, total) {
 
 function syncMeters() {
   const policy = quotaPolicy(quotaStatus);
+  const paid = currentQuote?.cost > 0;
+  const remaining = paid ? quotaStatus?.media?.credits?.remaining : policy.imageRemaining;
+  const limit = paid ? null : policy.imageLimit;
   paintMeter($("meterPoints"), $("ptLeft"), $("ptTotal"), $("ptFill"),
-    policy.unitsRemaining, policy.unitsLimit);
+    remaining, limit);
 
   const reset = Number(policy.resetSeconds);
   const when = Number.isFinite(reset) && reset > 0
     ? `，约 ${reset >= 3600 ? `${Math.round(reset / 3600)} 小时` : `${Math.max(1, Math.round(reset / 60))} 分钟`}后重置`
     : "";
-  $("meterPoints").dataset.tip = `今日点数 剩 ${meterNumber(policy.unitsRemaining)}/${meterNumber(policy.unitsLimit)}${when}`;
+  $("meterPoints").querySelector(".meter-k").textContent = paid ? "CREDITS" : "FREE";
+  $("meterPoints").dataset.tip = `${activeModel()?.name || "当前模型"} · ${paid ? "媒体积分" : "本周免费图片"}：${meterNumber(remaining)}；重置 ${quotaStatus?.media?.resets_at || "未知"}。临时 Key 日请求剩余 ${meterNumber(policy.tempRemaining)}${when}`;
   $("meters").dataset.loading = quotaLoading ? "1" : "0";
 }
 
@@ -592,8 +608,10 @@ async function refreshQuota({ force = false, announce = false } = {}) {
 
   quotaLoading = true;
   syncQuotaControls();
-  quotaRequest = fetchQuotaStatus()
+  const requestedModel = activeModel();
+  quotaRequest = fetchQuotaStatus(requestedModel)
     .then((status) => {
+      if (requestedModel?.id !== activeModel()?.id) return null;
       quotaStatus = status;
       quotaFetchedAt = Date.now();
       quotaLoading = false;
@@ -610,14 +628,15 @@ async function refreshQuota({ force = false, announce = false } = {}) {
       syncQuotaControls({ announce });
       return quotaStatus;
     })
-    .finally(() => { quotaRequest = null; });
+    .finally(() => {
+      quotaRequest = null;
+      if (requestedModel?.id !== activeModel()?.id) void refreshQuota({ force: true });
+    });
   return quotaRequest;
 }
 
-function noteSuccessfulImageQuota() {
-  if (!quotaStatus) return;
-  quotaStatus = recordSuccessfulImage(quotaStatus);
-  syncQuotaControls({ announce: true });
+async function noteSuccessfulImageQuota() {
+  await refreshQuota({ force: true, announce: true });
 }
 
 /* ── prefs ─────────────────────────────────────────────────── */
@@ -1070,6 +1089,7 @@ function setBusy(on) {
 
 async function runBatch(base) {
   const total = base.batchCount;
+  let approvedUnitCost = null;
   const typical = typicalMs(history.all());
   let completed = 0;
   let quotaStopped = false;
@@ -1106,16 +1126,20 @@ async function runBatch(base) {
         typical ? `通常约 ${(typical / 1000).toFixed(0)}s/张` : ""
       ].filter(Boolean).join(" · ");
 
-      const { blob, size, ms } = await generate(params, { signal: controller.signal });
+      const { blob, size, ms } = await generate(params, { signal: controller.signal,
+        beforeSend: quote => {
+          if (approvedUnitCost === null) {
+            if (quote.cost > 0 && !confirm(`本次需 ${quote.cost} 积分/张，${total} 张最多 ${quote.cost * total} 积分。继续？`)) {
+              throw new DOMException("已取消", "AbortError");
+            }
+            approvedUnitCost = quote.cost;
+          }
+          if (quote.cost > approvedUnitCost) throw new Error("报价上涨或免费额度已耗尽，剩余队列已停止，请重新确认费用");
+        }
+      });
       controller = null;
 
-      // Decode first so the picture never appears half-painted.
-      const probe = new Image();
-      const tmp = URL.createObjectURL(blob);
-      probe.src = tmp;
-      if (probe.decode) await probe.decode().catch(() => {});
-      URL.revokeObjectURL(tmp);
-
+      // The shared media client has already decoded and validated the result.
       const thumb = await makeThumb(blob);
       const record = history.add({
         blob, params, size, ms,
@@ -1128,7 +1152,7 @@ async function runBatch(base) {
          result; just let the rail show the new thumbnail. */
       if (browsing) renderGallery();
       else showEntry(record);
-      noteSuccessfulImageQuota();
+      await noteSuccessfulImageQuota();
       if (batchRestricted && completed < total) {
         quotaStopped = true;
         break;
@@ -1187,37 +1211,6 @@ async function runBatch(base) {
   }
 }
 
-/* Web Locks serializes every tab on this origin. The local proxy has its own
-   process-level guard as well; direct mode cannot coordinate other devices or
-   origins, so the upstream still remains the final authority there. */
-async function withGenerationLock(task) {
-  if (!navigator.locks?.request) {
-    await task();
-    return true;
-  }
-
-  let acquired = false;
-  let callbackStarted = false;
-  try {
-    await navigator.locks.request(
-      GENERATION_LOCK,
-      { mode: "exclusive", ifAvailable: true },
-      async (lock) => {
-        callbackStarted = true;
-        if (!lock) return;
-        acquired = true;
-        await task();
-      }
-    );
-  } catch (error) {
-    // Older Web Locks implementations may reject unsupported options. Only
-    // fall back when the task itself never started, otherwise it could run twice.
-    if (callbackStarted) throw error;
-    await task();
-    acquired = true;
-  }
-  return acquired;
-}
 
 async function run() {
   if (jobActive || quotaPreflightActive) { toast("已有生成任务，请先等待或取消"); return; }
@@ -1282,7 +1275,12 @@ $("cancelBtn").addEventListener("click", () => {
 });
 $("retryBtn").addEventListener("click", () => run());
 
-$("model").addEventListener("change", () => { syncModelHint(); persist(); });
+$("model").addEventListener("change", () => {
+  syncModelHint(); persist(); quotaStatus = null; quotaFetchedAt = 0;
+  void refreshQuota({ force: true }); scheduleQuote();
+});
+$("form").addEventListener("input", scheduleQuote);
+$("form").addEventListener("change", scheduleQuote);
 $("sampler").addEventListener("change", () => { syncAdvBadge(); persist(); });
 $("prompt").addEventListener("input", () => { syncPromptCount(); persistSoon(); });
 $("negative").addEventListener("input", () => { syncPromptCount(); persistSoon(); });
@@ -1416,6 +1414,7 @@ $("batchCount").addEventListener("keydown", (event) => {
 $("diceBtn").addEventListener("click", () => {
   $("seed").value = randomSeed();
   syncAdvBadge();
+  persist(); scheduleQuote();
 });
 
 $("resetAdv").addEventListener("click", () => {
@@ -1429,6 +1428,7 @@ $("resetAdv").addEventListener("click", () => {
   $("serverCache").checked = DEFAULTS.serverCache;
   $("transparentBg").checked = DEFAULTS.transparentBg;
   syncRangeLabels(); syncAdvBadge(); syncGenerateLabel(); persist();
+  scheduleQuote();
 });
 
 $("saveBtn").addEventListener("click", () => {
@@ -1464,6 +1464,8 @@ function syncAfterFormWrite() {
   syncPromptCount();
   sizeSkeleton();
   persist();
+  quotaStatus = null; quotaFetchedAt = 0;
+  void refreshQuota({ force: true }); scheduleQuote();
 }
 
 /* Write a subset of generation parameters into the form. Keys absent from
@@ -1478,9 +1480,8 @@ function applyParams(fields) {
 
   set("prompt", "prompt", fields.prompt);
   set("negative_prompt", "negative", fields.negative_prompt);
-  if (fields.model !== undefined && catalog.models.some((m) => m.id === fields.model)) {
-    set("model", "model", fields.model);
-  }
+  const importedModel = fields.model === undefined ? null : resolveModel(catalog.models, fields.model);
+  if (importedModel) set("model", "model", importedModel.id);
   set("width", "width", fields.width);
   set("height", "height", fields.height);
   set("steps", "steps", fields.steps);
@@ -1652,7 +1653,7 @@ function openImport(result) {
 
     /* A model or sampler this deployment does not offer cannot be applied.
        Offering the checkbox anyway would tick a box that does nothing. */
-    if (row.key === "model" && !catalog.models.some((m) => m.id === value)) {
+    if (row.key === "model" && !resolveModel(catalog.models, value)) {
       unusable.push(`模型 ${value}`);
       continue;
     }
@@ -2031,6 +2032,7 @@ async function enterApp() {
   measureFit();
   $("prompt").focus();
   void refreshQuota({ force: true });
+  scheduleQuote();
   applyPendingTags();
 }
 

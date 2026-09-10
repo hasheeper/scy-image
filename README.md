@@ -1,6 +1,27 @@
 # Scylla Image
 
-NAI 图片生成前端。纯静态、零依赖、零构建，可直接部署到 GitHub Pages，也可用本地 Node 服务运行。
+NAI 绘图与对话绘图工作区。纯静态、运行时零依赖、零构建，可直接部署到 GitHub Pages，也可用本地 Node 服务运行。
+
+## 对话绘图
+
+- 从顶栏「对话绘图」打开 `chat.html`。与 NAI 工作区互相在新标签页打开，保留各自的内存会话。
+- 支持目录中的 GPT Image 2、2.5 Sunburst / Flare 与 Nano Banana 系列，按模型显示质量、画幅、分辨率和格式；Lite 仅开放 1K。
+- 图片可上传、粘贴或拖入；上一张结果自动成为下一轮主图，也可引用旧图、固定参考图、移除引用或重置上下文。
+- 上下文面板展示实际带入的文字；带入轮数设为 0 表示当前分支全部文字。首版使用历史文字＋主图＋参考图直接绘图，不额外调用聊天模型，不冒充服务端原生会话。
+- 从任意旧图「继续编辑」形成分支；重新生成保留同一轮的多个版本。失败或取消不会成为有效上下文。
+- 单张上传不超过 8MB，本轮总图片不超过 32MB；数量按模型与网关限制取小。上传图片和会话只在内存，刷新前提示，刷新后清空。
+- 页面复用 NAI 的在线字体、主题、SVG 图标、暗色画框、顶部细进度条和单道掠光。手机工具收进侧栏，输入栏适配可见视口与安全区。
+- 输入栏采用发送／停止 SVG 图标；附件仅展示圆角缩略图与右上角关闭，主图和固定操作收进上下文面板。上下文以图标＋数量显示，保留悬停说明与无障碍名称。
+
+## 新版媒体接口与费用
+
+- 生成与报价分别使用 `/v1/studio/image/generate`、`/v1/studio/image/estimate`；改图使用 `/v1/image/tools/run`、`/v1/image/tools/estimate`。
+- 模型使用目录返回的真实 ID（含 `@local`），旧 NAI 偏好按唯一匹配迁移。
+- `/v1/media/quota` 按模型 `quota_group` 读取周图片额度，媒体积分独立显示。临时 Key 的日请求额度仍是另一项限制，不与媒体额度混算。
+- 顶栏跟随选中模型显示免费图片余量；当前报价需要积分时显示媒体积分。前端不再用 `rpd_units / rpd` 估价或自行扣点，完成后重读服务器额度。
+- 每次执行重新报价，并携带 `max_cost`。付费需明确确认；免费转付费或报价上涨会停止本轮/剩余队列，不自动重试生成请求。取消不保证上游已经停止或退费。
+- 两个工作区共用同源 Web Lock，本地代理另加进程锁；不支持安全锁的浏览器拒绝提交。不能约束其他设备或其他站点使用同一 Key 的请求。
+- 不承诺新路径完全不消耗临时请求额度；最终计费以服务器账本为准。原生 Responses/Gemini 会话、渐进预览、远程结果 URL 和异步任务轮询尚未启用。
 
 ## 两种运行方式
 
@@ -122,17 +143,15 @@ npm start   # → http://127.0.0.1:3215
 - 双语结果来自 `tagsuggest.zeabur.app`，英文查询必要时回退 Danbooru 官方自动补全接口。
   查询词会发送给对应在线服务，不会携带 Scylla API Key 或生成参数。
 
-## 只支持 NAI
+## NAI 工作区
 
-模型列表从 `GET /v1/image/models` 动态获取并过滤为 `provider: novelai`。
-上游同时公布了 Imagen 模型，但实测 `aspect_ratio` / `ratio` / `width+height` /
-不带尺寸四种参数组合全部返回失败占位图，因此不予提供。
+`index.html` 从 `GET /v1/image/models` 读取并过滤 NovelAI 模型。其他绘图模型在独立的对话绘图页使用，不把 NAI 的采样器、步数、CFG 参数发送给它们。
 
 ## 两个实测结论
 
 **上游用 HTTP 200 表示失败。** 参数非法时（例如分辨率超限）返回的是一张
 512×256 的 PNG，像素内容是「Generation Failed」字样。前端已按尺寸特征拦截，
-并在提交前做分辨率守卫（NAI 上限约 1.05M 像素，即 1024×1024 或 832×1216）。
+并在提交前按当前目录的 `max_resolution` 做分辨率守卫；较大画幅是否免费另由服务器报价决定。
 
 **seed 不保证可复现。** 两次 `seed` 相同、`cache: false` 的请求返回了不同的
 图像数据。因此 seed 由前端生成并记录，仅用于溯源，不承诺重现同一张图。
@@ -154,18 +173,36 @@ npm start   # → http://127.0.0.1:3215
 | `⌘/Ctrl + Enter` | 生成 |
 | `Esc` | 关闭放大视图 / 取消生成 |
 
+## 验证
+
+`npm run check` 检查全部前端模块语法并运行参数、额度、上下文和代理测试。
+`npm run test:browser` 需要额外安装 Playwright 及 Chromium（或通过 `PLAYWRIGHT_MODULE` 指定模块路径）。
+浏览器测试使用本地模拟上游，覆盖三轮改图、分支、多图、版本、取消、解码失败、报价变化、跨页锁、320/390/768px 和静态子路径直连，不消耗真实出图额度。
+
+接口目录、周额度、生成/编辑报价已做线上只读核验。模拟测试不能证明真实模型出图质量；Gemini 编辑尺寸的实际落地结果及新旧路径临时点数计费仍需真实出图联调。
+
 ## 结构
 
 ```
 docs/               ← GitHub Pages 根目录
   index.html
+  chat.html          对话绘图页
   tags.html          中英 Danbooru Tag 搜索页
-  styles.css
+  ui.css             共享主题、字体、图标按钮与等待态
+  styles.css         NAI 工作区布局
+  chat.css           对话绘图布局与移动端适配
   tags.css           Tag 搜索页样式
   .nojekyll         ← 避免 Jekyll 处理下划线开头的路径
   js/
     app.js          主控：状态机、校验、历史、灯箱
-    api.js          传输层：双模式、模型表、失败图识别
+    api.js          NAI 参数与新版媒体接口适配
+    transport.js    本地代理 / 静态直连
+    media-api.js    目录、额度、报价、执行与图片解码
+    model-catalog.js  模型能力与参数校验（前后端共用）
+    chat-page.js    对话工作区交互
+    conversation-store.js  会话、上下文、分支与版本
+    image-attachments.js   图片引用与内存资产管理
+    generation-lock.js    跨工作区生成锁
     tag-api.js      双语 Tag 查询 + Danbooru 英文回退
     tag-autocomplete.js  Prompt 自动补全
     tags-page.js    Tag 搜索、分页与 Prompt 组合
@@ -174,7 +211,7 @@ docs/               ← GitHub Pages 根目录
     image-meta.js   读取 PNG/JPEG 里的 NovelAI 与 WebUI 生成参数
     prompt-converter.js  WebUI 括号权重 → NAI 数值权重
     highlight.js    NAI 权重语法高亮
-    toast.js        两页共用的浮层提示
+    toast.js        NAI / Tag 页共用的浮层提示
     vault.js        Key 加密保管库
     store.js        会话内历史 + 偏好
 server.mjs          可选的本地服务（静态托管 + 代理）

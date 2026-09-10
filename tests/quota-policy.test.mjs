@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { quotaPolicy, recordSuccessfulImage } from "../docs/js/quota-policy.js";
+import { quotaPolicy } from "../docs/js/quota-policy.js";
+import { normalizeQuota } from "../docs/js/quota-normalize.js";
 
 const status = (imageUsed, tempRemaining, overrides = {}) => ({
   temporaryChecked: true,
@@ -33,11 +34,14 @@ assert.equal(quotaPolicy(null).serialDisabled, true);
 assert.equal(quotaPolicy(status(null, null)).serialDisabled, true);
 assert.equal(quotaPolicy({ temporaryChecked: true, image: null, temporary: null }).serialDisabled, false);
 
-const consumed = recordSuccessfulImage(status(539, 300.1));
-assert.equal(consumed.image.used, 540);
-assert.equal(consumed.image.remaining, 460);
-assert.equal(consumed.temporary.used, 700.9);
-assert.equal(consumed.temporary.remaining, 299.1);
-assert.equal(quotaPolicy(consumed).serialDisabled, true);
+const media = { period: "weekly", images: { "novelai-v5": { used: 2, remaining: 248, limit: 250 }, "novelai-v4.5": { used: 1, remaining: 1999, limit: 2000 } } };
+const stats = { temp_limits: { is_temp: true, limited: true, rpd_remaining: 539, rpd_remaining_units: 4610, rpd_units: 10000 } };
+const normalized = normalizeQuota(media, stats, true, "novelai-v5");
+assert.equal(normalized.image.remaining, 248);
+assert.equal(normalized.temporary.remaining, 539);
+assert.equal(normalized.temporary.unitsRemaining, 4610);
+assert.equal(normalizeQuota(media, stats, true, "novelai-v4.5").image.remaining, 1999);
+assert.equal(normalizeQuota(media, stats, true, "missing").image, null);
+assert.deepEqual(normalizeQuota(media, stats, true, "novelai-v5"), normalized, "normalization never infers consumption");
 
 console.log("quota policy tests passed");

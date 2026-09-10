@@ -1,0 +1,1153 @@
+/* ══════════════════════════════════════════════════════════════
+   Scylla Image
+   Design intent: the generated image is the only bright object on
+   screen. Chrome stays quiet, cool-neutral, and low-contrast so a
+   picture placed on it reads as a physical print on a dark mat.
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Surfaces ───────────────────────────────────────────────
+     Slightly blue-shifted greys. Pure neutral greys look muddy next
+     to saturated artwork; a cool cast makes warm colours pop. The
+     blue shift (B−R) grows with lightness: +2 → +8.
+
+     Steps are set by ΔL* (perceptual lightness), NOT by WCAG contrast
+     ratio. CR exists to predict text legibility; its +0.05 term
+     dominates at the dark end, so a fixed CR target demands a far
+     bigger perceptual jump near black than it does at mid grey. An
+     earlier pass here chased "CR ≥ 1.15" from a near-black canvas and
+     produced ΔL* = +13 between the viewport and the panels — two to
+     four times what any shipping product uses, which read as a rift
+     down the middle of the window rather than as structure:
+
+       VS Code  +3.45    Notion  +3.49
+       Linear   +5.15    Figma   +6.74
+
+     A later pass tightened it further: +4 still read as too much separation
+     for a tool whose entire job is looking at pictures. Image generators sit at
+     the quiet end of that band — NovelAI is barely a shade — because every step
+     in the chrome competes with the artwork. canvas→chrome is +2.5 now and the
+     panels are still unmistakably panels. The original
+     problem still had to be fixed: topbar, composer, stage, viewport
+     and gallery all painted the same colour, so the five main regions
+     had zero separation and the app read as controls scattered on one
+     black board. Panels are now distinct — by one step, not a chasm.
+
+     Absolute level stays close to the original near-black, because the
+     point of this UI is that the picture is the bright object. White
+     on --canvas is still 19.3:1. */
+  --canvas: #131315;   /* viewport — the mat a print sits on */
+  --sunken: #131316;   /* inputs, wells, thumbnails */
+  --chrome: #18181c;   /* topbar, composer, stage head, gallery */
+  --raised: #1e1e24;   /* cards, drawers, sheets, tooltips */
+  --hover:  #24242c;   /* pointer feedback on raised things */
+
+  /* Focus deepens the well by one notch. This was a hardcoded #0c0c0f that
+     survived two retunes of the ramp and had drifted to L*=3.4 — darker than
+     the canvas the image sits on. */
+  --sunken-focus: #101013;
+
+  /* "Recessed" is a relationship, not a colour. --sunken is tuned to sit one
+     notch (ΔL* 2.4) below --chrome, which is right for controls in the composer
+     but wrong inside a --raised card: there the same absolute value lands 5.5
+     below its container and the control reads as a hole punched in the panel.
+     Raised containers re-point these two so the recess stays one notch deep
+     wherever a control happens to live. */
+  --well: var(--sunken);
+  --well-focus: var(--sunken-focus);
+
+  --line: #1f1f25;     /* ΔL* +3.6 over chrome */
+  --line-2: #25252e;   /* ΔL* +6.6 — emphasis dividers, focus wells */
+
+  /* Contrast ratio IS the right metric here — it is what WCAG models.
+     Anchored against --raised, the lightest surface any of these can
+     land on: labels and hints sit inside drawers and cards too, and a
+     value tuned for the panel silently fails one level up. Measuring
+     rendered pixels caught exactly that — .chip came out at 2.79 while
+     the arithmetic said 3.20, because .chip sits on --raised. */
+  --fg: #e8e8eb;
+  --fg-2: #a8a8ae;   /* 7.01 on raised */
+  --fg-3: #86868d;   /* 4.59 on raised — AA */
+  --fg-4: #6a6a71;   /* 3.09 on raised — decorative/large only */
+
+  --a: #b3a1ff;
+  --a-ink: #17132a;
+  --a-hover: #c1b2ff;
+  --a-glow: rgba(179, 161, 255, 0.09);
+  --a-dim: rgba(179, 161, 255, 0.13);
+  --a-line: rgba(179, 161, 255, 0.34);
+
+  --ok: #74cf9b;
+  --warn: #e0ab68;
+  --err: #e88787;
+  --err-dim: rgba(232, 135, 135, 0.08);
+
+  /* elevation — spread grows negative with height so edges stay tight */
+  --sh-1: 0 6px 16px -4px rgba(0, 0, 0, 0.6);
+  --sh-2: 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+  --sh-3: 0 14px 38px -10px rgba(0, 0, 0, 0.84);
+  --sh-4: 0 32px 80px -12px rgba(0, 0, 0, 0.7);
+  --sh-lip: 0 1px 0 rgba(255, 255, 255, 0.035) inset;
+  --ring: 0 0 0 3px var(--a-dim);
+
+  /* stacking contract — keep every layer in this table */
+  --z-action: 19;
+  --z-sticky: 20;
+  --z-tip: 40;
+  --z-pop: 80;
+  --z-scrim: 90;
+  --z-modal: 100;
+  --z-toast: 110;
+
+  /* ── Spacing ────────────────────────────────────────────────
+     A true 4px grid. The old scale claimed "4px baseline" while 7 of
+     its 8 values broke it (7/11/15/18/22/30/38) with ratios lurching
+     between 1.75 and 1.20. Individually each looked fine; together
+     they had no rhythm, which is the difference between a designed
+     system and accumulated nudges. */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+
+  --r1: 5px; --r2: 7px; --r3: 10px; --r4: 15px;
+
+  /* ── Type ───────────────────────────────────────────────────
+     The old scale was 10/11/12/13px: a 1.30× total span with 1.09
+     steps. That is below the threshold where a size difference reads
+     as hierarchy, so "title" and "body" were the same object to the
+     eye and the whole surface flattened into grey noise. Commercial
+     UI spans ~3×. This spans 2.55× and keeps steps ≥1.15 from --md
+     up, where hierarchy actually has to be legible.
+
+     Small sizes stay tight (11/12/13) because CJK glyphs carry far
+     more visual weight than Latin at the same size. */
+  --fz-2xs: 11px;  /* meta, counters, mono readouts */
+  --fz-xs:  12px;  /* labels, hints */
+  --fz-sm:  13px;  /* body, inputs, buttons */
+  --fz-md:  15px;  /* prompt, primary action */
+  --fz-lg:  18px;  /* section titles */
+  --fz-xl:  22px;  /* modal titles */
+  --fz-2xl: 28px;  /* key gate brand */
+
+  /* Four named weights keep hierarchy deliberate across both pages. The
+     variable font files contain every level, so the browser never has to
+     synthesize a missing face. */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --ico: 16px;
+
+  --e: cubic-bezier(0.32, 0.72, 0.28, 1);
+  --e-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t1: 120ms; --t2: 220ms; --t3: 380ms;
+
+  /* Manrope gives the UI its compact geometric voice; Noto Sans SC covers
+     arbitrary Chinese input with the same complete variable-weight range. */
+  --sans: "Manrope Variable", "Noto Sans SC Variable", sans-serif;
+  --mono: "JetBrains Mono Variable", "Noto Sans SC Variable", monospace;
+
+  /* The header is taller than the inner column heads: it carries the brand and
+     the gauges, they carry a label. These were all one hardcoded 48px, so any
+     change to the header silently broke the shell height and the sticky offset.
+     Two names now, and the dependents reference --bar-h. */
+  --bar-h: 60px;    /* topbar */
+  --head-h: 48px;   /* gallery head (the stage status is sr-only, not a bar) */
+  --mobile-foot-h: 61px;
+
+  /* Loading-state ink. Both stay inside the accent hue; only lightness moves.
+     These are deliberately far stronger than a surface step (~2.5 dL*): a
+     loading state has to read as motion from across the room, and the earlier
+     0.10-alpha attempt measured as barely-there. */
+  --bar-ink: rgba(214, 205, 255, 0.92);
+  /* Peak of the travelling band. Only the strip under the band pays this, so the
+     frame keeps its own dark base — unlike a flat fill, where the alpha applies
+     to every pixel and any value high enough to notice washes the panel out. */
+  --sheen-ink: rgba(214, 205, 255, 0.14);
+
+  --rail: 316px;
+  --hist: 132px;
+  --cart: 300px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+* { min-width: 0; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--fg);
+  font: var(--fw-regular) var(--fz-sm)/1.5 var(--sans);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.003em;
+}
+
+button, input, textarea, select, output { font: inherit; color: inherit; letter-spacing: inherit; }
+button { cursor: pointer; border: 0; background: none; padding: 0; }
+h1 { margin: 0; font-weight: var(--fw-bold); }
+b, strong { font-weight: var(--fw-semibold); }
+p { margin: 0; }
+hr.rule { height: 1px; margin: var(--sp-2) 0; border: 0; background: var(--line); }
+
+.mono { font-family: var(--mono); font-size: var(--fz-2xs); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.dim { color: var(--fg-3); }
+
+kbd {
+  font: var(--fw-medium) var(--fz-2xs)/1 var(--mono);
+  padding: 3px 5px;
+  color: var(--fg-2);
+  background: var(--well);
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+}
+
+:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; border-radius: var(--r1); }
+:focus:not(:focus-visible) { outline: none; }
+::selection { background: rgba(179, 161, 255, 0.3); }
+
+/* thin, self-effacing scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+*::-webkit-scrollbar { width: 11px; height: 11px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border: 3.5px solid transparent;
+  background-clip: content-box;
+  border-radius: 99px;
+}
+*::-webkit-scrollbar-thumb:hover { background: #40404c; background-clip: content-box; }
+
+/* ── Form primitives ─────────────────────────────────────────── */
+input[type="text"], input[type="number"], input[type="password"],
+input[type="search"], textarea, select {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+  transition: border-color var(--t1) var(--e), background var(--t1) var(--e),
+    box-shadow var(--t1) var(--e);
+}
+input[type="search"] { appearance: none; }
+input[type="search"]::-webkit-search-cancel-button { opacity: 0.45; cursor: pointer; }
+input[type="number"] { font-family: var(--mono); font-size: var(--fz-sm); }
+input:hover:not(:focus), textarea:hover:not(:focus), select:hover:not(:focus) { border-color: var(--line-2); }
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--a-line);
+  background: var(--well-focus);
+  box-shadow: var(--ring);
+}
+::placeholder { color: var(--fg-4); }
+textarea { resize: vertical; line-height: 1.6; }
+input[type="number"]::-webkit-inner-spin-button { opacity: 0.35; }
+
+select {
+  appearance: none;
+  padding-right: 30px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.75 6 8.25l3.5-3.5' fill='none' stroke='%23a6a5b0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+select option { background: var(--raised); }
+
+/* field */
+.fld { display: grid; gap: 6px; }
+.fld-group { display: grid; gap: var(--sp-3); }
+.fld-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 22px; }
+.fld-actions { display: flex; align-items: center; gap: var(--sp-2); }
+.fld label, .slider-top label {
+  font-size: var(--fz-xs); font-weight: var(--fw-medium);
+  color: var(--fg-3);
+  letter-spacing: 0.01em;
+}
+.hint { font-size: var(--fz-xs); line-height: 1.45; color: var(--fg-3); transition: color var(--t1) var(--e); }
+.hint.warn { color: var(--warn); }
+.hint[hidden] { display: none; }
+.fld-inline input:disabled { opacity: 0.52; cursor: not-allowed; }
+
+.quota-warning {
+  display: flex; align-items: flex-start; gap: 7px;
+  padding: 7px 9px;
+  color: var(--warn); background: rgba(224, 171, 104, 0.08);
+  border: 1px solid rgba(224, 171, 104, 0.22); border-radius: var(--r2);
+  font-size: var(--fz-2xs); line-height: 1.4;
+}
+.quota-warning[hidden] { display: none; }
+.quota-warning .ico { flex: none; width: 14px; height: 14px; margin-top: 1px; }
+
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.pair.tight { gap: var(--sp-2); }
+.pair[hidden] { display: none; }
+
+/* The prompt is the primary input, so it claims all leftover height. */
+.fld-hero {
+  position: relative;
+  flex: 1 1 auto !important;
+  min-height: 190px;
+  display: grid;
+  /* tab row + input row */
+  grid-template-rows: auto minmax(0, 1fr);
+}
+/* The wrapper takes the flexible row; the textarea fills it. All text metrics
+   come from the shared .hl-wrap block so the mirror cannot drift. */
+/* The wrapper is a bounded scroller filling the flexible row. The textarea
+   inside is unbounded (auto-grown), which is what makes the wrapper scroll. */
+.fld-hero .hl-wrap { height: 100%; min-height: 0; }
+/* Under the tab strip the well's top edge is the strip's own border, so the
+   top corners square off and the top border is dropped to avoid a double line. */
+.pane .hl-wrap {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top-color: transparent;
+}
+.fld-hero[data-resized="1"] { flex: none !important; }
+
+
+/* ── Icons ───────────────────────────────────────────────────── */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ico {
+  width: var(--ico); height: var(--ico);
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ico-lg { width: 26px; height: 26px; }
+.ico-xl { width: 34px; height: 34px; stroke-width: 1.3; }
+.ico.err { stroke: var(--err); opacity: .8; }
+
+/* Icon-only button. Tooltip comes from data-tip so no visible label is
+   needed while the action stays discoverable. */
+.ibtn {
+  position: relative;
+  display: inline-grid; place-items: center;
+  width: 32px; height: 32px;
+  flex: none;
+  color: var(--fg-3);
+  text-decoration: none;
+  border-radius: var(--r2);
+  transition: color var(--t1) var(--e), background var(--t1) var(--e);
+}
+.ibtn:hover { color: var(--fg); background: var(--raised); }
+.ibtn:active { transform: scale(.94); }
+.ibtn[hidden] { display: none; }
+.ibtn-xs { width: 28px; height: 28px; --ico: 17px; }
+/* The prompt block's two actions carry real weight now that the labels are
+   gone: bigger glyph, brighter idle colour, and a visible resting surface so
+   they read as buttons rather than as ornament. */
+/* Recessed icon button. Introduced for the prompt block and now shared with the
+   header so both read as inset controls cut into the panel rather than as bare
+   glyphs floating on it. */
+.fld-actions .ibtn {
+  width: 30px; height: 30px;
+  --ico: 19px;
+}
+.topbar-end .ibtn {
+  width: 34px; height: 34px;
+  --ico: 20px;
+}
+.fld-actions .ibtn,
+.topbar-end .ibtn {
+  color: var(--fg-2);
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.fld-actions .ibtn:hover,
+.topbar-end .ibtn:hover {
+  color: var(--fg);
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.fld-actions .ibtn .ico,
+.topbar-end .ibtn .ico { stroke-width: 1.9; }
+/* History toggle when off: still inset, just quieter. */
+.topbar-end .ibtn[aria-pressed="false"] { color: var(--fg-4); }
+.topbar-end .ibtn[aria-pressed="false"]:hover { color: var(--fg-2); }
+.ibtn-accent { color: var(--a); }
+.ibtn-accent:hover { color: var(--a); background: var(--a-dim); }
+/* Settled state after a successful clean — reverts on the next edit. */
+.ibtn[data-state="done"] { color: var(--ok); }
+.ibtn[aria-pressed="false"] { color: var(--fg-4); }
+.ibtn[aria-pressed="false"]:hover { color: var(--fg-2); }
+
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; top: calc(100% + 6px); left: 50%;
+  transform: translate(-50%, -3px);
+  padding: 4px 7px;
+  font-size: var(--fz-2xs); line-height: 1.3;
+  white-space: nowrap;
+  color: var(--fg-2);
+  background: var(--hover);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r1);
+  box-shadow: var(--sh-1);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--t1) var(--e), transform var(--t1) var(--e);
+  z-index: var(--z-tip);
+}
+[data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 260ms; }
+.result-actions [data-tip]::after,
+.tray [data-tip]::after,
+.fld-actions [data-tip]::after,
+.topbar-end [data-tip]::after { left: auto; right: 0; transform: translate(0, -3px); }
+.fld-actions [data-tip]:hover::after,
+.result-actions [data-tip]:hover::after,
+.tray [data-tip]:hover::after,
+.topbar-end [data-tip]:hover::after { transform: translate(0, 0); }
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  padding: 7px 12px;
+  font-size: var(--fz-sm); font-weight: var(--fw-medium);
+  border-radius: var(--r2);
+  white-space: nowrap;
+  transition: background var(--t1) var(--e), color var(--t1) var(--e),
+    border-color var(--t1) var(--e), transform var(--t1) var(--e), opacity var(--t1) var(--e);
+}
+.btn:active { transform: scale(0.978); }
+.btn[hidden] { display: none; }
+.btn-block { width: 100%; }
+.btn-sm { padding: 6px 10px; font-size: var(--fz-xs); gap: 6px; --ico: 13px; }
+.btn .ico { stroke-width: 1.7; }
+
+.btn-primary { background: var(--a); color: var(--a-ink); font-weight: var(--fw-semibold); }
+.btn-primary:hover { background: var(--a-hover); }
+.btn-primary:disabled { background: var(--raised); color: var(--fg-4); cursor: not-allowed; transform: none; }
+
+.btn-quiet { color: var(--fg-2); background: var(--raised); border: 1px solid var(--line); }
+.btn-quiet:hover { color: var(--fg); background: var(--hover); border-color: var(--line-2); }
+
+.btn-accent { color: var(--a); background: var(--a-dim); border: 1px solid var(--a-line); font-weight: var(--fw-semibold); }
+.btn-accent:hover { background: rgba(179, 161, 255, 0.2); }
+
+.btn-link {
+  font-size: var(--fz-xs); color: var(--fg-3);
+  transition: color var(--t1) var(--e);
+}
+.btn-link:hover { color: var(--a); }
+.btn-link.centered { justify-self: center; }
+
+/* ── Generate: the one purchase button on the page ──────────────
+   A flat accent fill reads as a sticker next to surfaces that all carry
+   lips and elevation. This is the control that spends the user's quota,
+   so it gets the full physical treatment the rest of the chrome earns
+   more quietly: a vertical gradient (lit from above like every panel),
+   an inset top lip, and an accent-tinted drop that couples it to the
+   page's light model instead of floating over it. */
+.btn-go {
+  height: 46px;
+  font-size: var(--fz-md); font-weight: var(--fw-semibold);
+  border-radius: var(--r3);
+  background: linear-gradient(to bottom, var(--a-hover), var(--a) 72%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 -1px 0 rgba(23, 19, 42, 0.22) inset,
+    0 2px 6px -2px rgba(0, 0, 0, 0.55),
+    0 12px 26px -12px rgba(179, 161, 255, 0.5);
+}
+.btn-go:hover {
+  background: linear-gradient(to bottom, #cbbeff, var(--a-hover) 72%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.38) inset,
+    0 -1px 0 rgba(23, 19, 42, 0.22) inset,
+    0 2px 6px -2px rgba(0, 0, 0, 0.55),
+    0 14px 30px -12px rgba(179, 161, 255, 0.62);
+}
+/* Press = travel down + shadow collapse, not a generic shrink. */
+.btn-go:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 rgba(23, 19, 42, 0.18) inset,
+    0 6px 14px -10px rgba(179, 161, 255, 0.4);
+}
+.btn-go:disabled {
+  background: var(--raised);
+  box-shadow: var(--sh-lip);
+  transform: none;
+}
+.btn-go kbd { background: rgba(23, 19, 42, 0.16); border-color: transparent; color: rgba(23, 19, 42, 0.66); }
+.btn-primary:disabled kbd { opacity: 0.4; }
+
+/* Working ≠ unavailable. Disabled-grey answers "can I press this?" but the
+   moment after pressing the question becomes "is it doing anything?" — so
+   while the form is busy the button stays in the accent family, dimmed to
+   ink-on-dark, with a travelling light band borrowed from the stage sheen.
+   Without this the click appears to do nothing, which reads as a dead UI. */
+.generation-form[aria-busy="true"] .btn-go:disabled {
+  position: relative;
+  overflow: hidden;
+  background: var(--a-dim);
+  color: var(--a);
+  box-shadow: 0 0 0 1px var(--a-line) inset;
+}
+.generation-form[aria-busy="true"] .btn-go:disabled::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg,
+    transparent 30%,
+    rgba(214, 205, 255, 0.16) 50%,
+    transparent 70%);
+  background-size: 250% 100%;
+  animation: goSweep 1.9s cubic-bezier(0.45, 0.05, 0.35, 1) infinite;
+}
+@keyframes goSweep {
+  from { background-position: 130% 0; }
+  to { background-position: -130% 0; }
+}
+/* The shortcut is inert while the job runs; a grey chip inside an active
+   button would just be clutter. */
+.generation-form[aria-busy="true"] .btn-go kbd { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .generation-form[aria-busy="true"] .btn-go:disabled::after { animation: none; background: none; }
+}
+
+/* Price rides inside the action that spends it: the same four-point glyph
+   as the header gauge names the currency, mono tabular digits keep the
+   figure planted while the count changes. */
+.cost-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font: var(--fw-semibold) var(--fz-2xs)/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  background: rgba(23, 19, 42, 0.18);
+  color: rgba(23, 19, 42, 0.78);
+}
+.cost-tag .ico {
+  width: 11px; height: 11px;
+  fill: currentColor; stroke: none;
+}
+.cost-tag[hidden] { display: none; }
+.btn-go:disabled .cost-tag { background: var(--well); color: var(--fg-4); }
+
+/* Cancel appears only while money is burning: same footprint family as the
+   generate button (full width, real height), quiet until hovered, then it
+   names its consequence in the error hue. */
+.btn-cancel {
+  height: 40px;
+  color: var(--fg-2);
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-lip);
+}
+.btn-cancel:hover { color: var(--err); background: var(--err-dim); border-color: rgba(232, 135, 135, 0.38); }
+.btn-cancel .cost-tag { background: var(--a-dim); color: var(--a); }
+.btn-cancel:hover .cost-tag { background: var(--err-dim); color: var(--err); }
+
+
+/* ── Checkbox ────────────────────────────────────────────────── */
+.check { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; color: var(--fg-2); font-size: var(--fz-sm); }
+.check .sub { font-style: normal; font-size: var(--fz-2xs); color: var(--fg-3); margin-left: 4px; }
+.check:hover { color: var(--fg); }
+.check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.check > span:first-of-type {
+  position: relative; flex: none;
+  width: 16px; height: 16px;
+  background: var(--well);
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  transition: background var(--t1) var(--e), border-color var(--t1) var(--e);
+}
+.check > span:first-of-type::after {
+  content: ""; position: absolute; inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.8 8.4 6.4 11 12.2 5.2' fill='none' stroke='%2317132a' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/11px no-repeat;
+  opacity: 0; transform: scale(0.6);
+  transition: opacity var(--t1) var(--e), transform var(--t2) var(--e-out);
+}
+.check input:checked + span { background: var(--a); border-color: var(--a); }
+.check input:checked + span::after { opacity: 1; transform: none; }
+.check input:focus-visible + span { outline: 2px solid var(--a); outline-offset: 2px; }
+.check:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+.check:has(input:disabled):hover { color: var(--fg-2); }
+.switches { display: grid; gap: 9px; }
+
+/* ── Segmented ───────────────────────────────────────────────── */
+.seg { display: grid; grid-auto-flow: column; gap: 3px; padding: 3px; background: var(--well); border: 1px solid var(--line); border-radius: var(--r2); }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; width: 0; height: 0; }
+.seg span {
+  display: block; padding: 7px 8px; text-align: center;
+  font-size: var(--fz-xs); color: var(--fg-3);
+  border-radius: var(--r1); cursor: pointer;
+  transition: background var(--t1) var(--e), color var(--t1) var(--e);
+}
+.seg span:hover { color: var(--fg-2); }
+.seg input:checked + span { background: var(--raised); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.seg input:focus-visible + span { outline: 2px solid var(--a); outline-offset: 1px; }
+
+
+
+/* ── Sliders ─────────────────────────────────────────────────── */
+.slider { display: grid; gap: 5px; }
+.slider-top { display: flex; align-items: center; justify-content: space-between; }
+.pill {
+  min-width: 32px; padding: 2px 6px;
+  font: var(--fw-medium) var(--fz-2xs)/1.4 var(--mono); font-variant-numeric: tabular-nums;
+  text-align: center; color: var(--fg);
+  background: var(--well); border: 1px solid var(--line);
+  border-radius: 20px;
+  transition: color var(--t1) var(--e), border-color var(--t1) var(--e);
+}
+.slider:focus-within .pill { color: var(--a); border-color: var(--a-line); }
+
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 18px;
+  background: none; border: 0; padding: 0; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: var(--line-2); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px; margin-top: -5px;
+  border-radius: 50%; background: var(--fg-2);
+  transition: background var(--t1) var(--e), transform var(--t1) var(--e-out),
+    box-shadow var(--t1) var(--e);
+}
+input[type="range"]:hover::-webkit-slider-thumb { background: var(--fg); }
+input[type="range"]:active::-webkit-slider-thumb,
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  background: var(--a); transform: scale(1.2); box-shadow: 0 0 0 5px var(--a-dim);
+}
+input[type="range"]::-moz-range-track { height: 3px; border-radius: 2px; background: var(--line-2); }
+input[type="range"]::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--fg-2); }
+
+/* ── Gate ────────────────────────────────────────────────────── */
+.gate {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  display: grid; place-items: center; padding: var(--sp-5);
+  background: rgba(8, 8, 10, 0.9);
+  backdrop-filter: blur(10px) saturate(120%);
+  opacity: 0;
+  transition: opacity var(--t3) var(--e);
+}
+.gate[hidden] { display: none; }
+body[data-gate="open"] .gate { opacity: 1; }
+
+.gate-card {
+  width: min(408px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: var(--sp-5);
+  display: grid; gap: var(--sp-4);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r4);
+  box-shadow: var(--sh-lip), var(--sh-4);
+  transform: translateY(10px) scale(0.985);
+  transition: transform var(--t3) var(--e-out);
+}
+body[data-gate="open"] .gate-card { transform: none; }
+
+.gate-brand { display: flex; align-items: center; gap: var(--sp-3); }
+.gate-brand .ico { color: var(--a); }
+.gate-brand h1 { font-size: var(--fz-2xl); font-weight: var(--fw-bold); letter-spacing: -0.025em; }
+.app-gate-brand { gap: 11px; }
+.gate-brand-mark {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 50%;
+  filter: drop-shadow(0 4px 10px rgba(115, 54, 135, 0.28));
+}
+.app-gate-brand .brand-title { font-size: 25px; }
+
+.lede { margin-top: calc(var(--sp-4) * -1 + 2px); color: var(--fg-2); font-size: var(--fz-sm); line-height: 1.6; }
+.gate-view { display: grid; gap: var(--sp-3); }
+.gate-view[hidden] { display: none; }
+.note { min-height: 14px; font-size: var(--fz-xs); color: var(--err); }
+.note.ok { color: var(--ok); }
+
+.disclose { border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+.disclose summary { display: flex; align-items: center; gap: 5px; color: var(--fg-4); font-size: var(--fz-xs); cursor: pointer; list-style: none; }
+.disclose summary::-webkit-details-marker { display: none; }
+.disclose summary::before {
+  content: ""; width: 6px; height: 6px; flex: none;
+  border-right: 1.4px solid currentColor; border-bottom: 1.4px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--t2) var(--e);
+}
+.disclose[open] summary::before { transform: rotate(45deg); }
+.disclose summary:hover { color: var(--fg-2); }
+.disclose p { margin-top: var(--sp-2); color: var(--fg-3); font-size: var(--fz-xs); line-height: 1.65; }
+.disclose b { color: var(--fg-2); font-weight: var(--fw-semibold); }
+
+/* ── Topbar ──────────────────────────────────────────────────── */
+.topbar {
+  height: var(--bar-h); flex: none;
+  padding: 0 var(--sp-3);
+  display: flex; align-items: center; gap: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--chrome);
+  position: sticky; top: 0; z-index: var(--z-sticky);
+}
+.brand {
+  display: flex; align-items: center; gap: 9px;
+  flex: none;
+  white-space: nowrap;
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 50%;
+  filter: drop-shadow(0 3px 8px rgba(115, 54, 135, 0.24));
+}
+.brand-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1;
+}
+.brand-title {
+  color: #f7f3ff;
+  background: linear-gradient(112deg, #ffffff 4%, #eadcff 48%, #bd93f7 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-family: var(--sans);
+  font-size: 22px;
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.055em;
+  line-height: 1;
+  text-shadow: 0 0 18px rgba(189, 147, 247, 0.09);
+}
+.brand-subtitle {
+  color: rgba(255, 255, 255, 0.88);
+  font: var(--fw-bold) 11px/1 var(--sans);
+  letter-spacing: 0.11em;
+  transform: translateY(-0.5px);
+}
+
+.topbar-menu { display: flex; align-items: center; margin-left: auto; flex: none; }
+.topbar-menu-toggle,
+.topbar-menu-backdrop,
+.topbar-action-label { display: none; }
+.topbar-end { display: flex; align-items: center; gap: 6px; flex: none; }
+
+.chip {
+  padding: 3px 8px;
+  font-size: var(--fz-2xs); color: var(--fg-3);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+
+/* ── Header instrument cluster ───────────────────────────────── */
+/* Only the billed point balance is presented. Image quota is still consumed by
+   the batch-safety policy, but does not compete for permanent header space. */
+.meters {
+  display: flex;
+  align-items: stretch;
+  margin-left: 16px;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+.meter {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px auto auto;
+  grid-template-areas: "i k v" "b b b";
+  align-items: center;
+  gap: 0 6px;
+  padding: 5px 8px 6px;
+  min-width: 132px;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+  transform: translateY(2px);
+  transition: border-color var(--t1) var(--e), background var(--t1) var(--e), box-shadow var(--t1) var(--e);
+}
+.meter:hover {
+  border-color: var(--line-2);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04), 0 0 0 1px rgba(179, 161, 255, 0.04);
+}
+.meter-icon {
+  grid-area: i;
+  width: 18px;
+  height: 18px;
+  color: var(--a);
+  fill: currentColor;
+  stroke: none;
+  filter: drop-shadow(0 0 5px rgba(179, 161, 255, 0.22));
+}
+/* Uppercase micro-label: it names the figure without competing with it. */
+.meter-k {
+  grid-area: k;
+  font: var(--fw-semibold) 10px/1.2 var(--sans);
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.meter-v {
+  grid-area: v;
+  justify-self: end;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.meter-v b { font: var(--fw-semibold) var(--fz-sm)/1.2 var(--mono); color: var(--fg); }
+.meter-v i { font-style: normal; font-size: 10px; color: var(--fg-4); }
+/* Hairline gauge. 2px is enough to read a proportion at a glance and small
+   enough that it never becomes the loudest thing on the bar. */
+.meter-bar {
+  grid-area: b;
+  margin-top: 3px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.meter-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--a);
+  transition: width var(--t3) var(--e-out), background var(--t2) var(--e);
+}
+.meter[data-level="low"] .meter-bar > i { background: var(--warn); }
+.meter[data-level="crit"] .meter-bar > i { background: var(--err); }
+.meter[data-level="low"] .meter-v b { color: var(--warn); }
+.meter[data-level="crit"] .meter-v b { color: var(--err); }
+.meter[data-level="unknown"] .meter-v b { color: var(--fg-4); }
+/* Quota in flight: pulse the rail rather than swapping in a spinner, which
+   would make the bar jump. */
+.meters[data-loading="1"] .meter-bar { animation: meterWait 1.1s var(--e) infinite; }
+@keyframes meterWait { 50% { opacity: 0.45; } }
+
+
+/* ── The print ───────────────────────────────────────────────── */
+/* A figure sized by its own aspect-ratio so the image never sits in
+   dead space, with a real drop shadow so it reads as an object. */
+/* Sizing note: the previous version put `aspect-ratio` on .print and
+   `max-height:100%` on the img. A percentage height resolving against a
+   content-sized parent computes to `none`, so the image escaped its box and
+   overflowed. Now JS measures the viewport and publishes --fit-w/--fit-h in
+   pixels; the image is bounded by those, and .print simply wraps it. */
+.print {
+  position: relative;
+  margin: 0;
+  display: block;
+  line-height: 0;
+  border-radius: var(--r3);
+  overflow: hidden;
+  background: var(--sunken);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 1px 2px rgba(0,0,0,0.24),
+    0 14px 36px -12px rgba(0,0,0,0.6);
+  animation: printIn var(--t3) var(--e-out);
+}
+@keyframes printIn { from { opacity: 0; transform: translateY(6px) scale(0.988); } }
+
+.print img {
+  display: block;
+  width: auto; height: auto;
+  max-width: var(--fit-w, 100%);
+  max-height: var(--fit-h, 70vh);
+  cursor: zoom-in;
+}
+
+/* Fit-only: the image always scales down to the stage. Clicking opens the
+   lightbox for a closer look, which replaces the old 1:1 toggle. */
+
+/* Result information sits below the image instead of obscuring it. */
+.result-panel {
+  display: none;
+  gap: var(--sp-2);
+  padding: 10px var(--sp-3) var(--sp-3);
+  min-width: 0;
+  color: var(--fg-2);
+  background: color-mix(in srgb, var(--canvas) 78%, var(--chrome));
+  border-top: 1px solid var(--line);
+}
+body[data-state="done"] .result-panel { display: grid; }
+
+.result-copy { display: grid; gap: 3px; min-width: 0; }
+.result-name-row { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.result-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--fw-semibold) var(--fz-sm)/1.35 var(--sans);
+  color: var(--fg);
+}
+.result-model { font-size: var(--fz-2xs); color: var(--fg-3); }
+.result-bottom { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.result-params {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.result-params::-webkit-scrollbar { display: none; }
+.result-param {
+  flex: none;
+  padding: 6px 8px;
+  font-size: var(--fz-2xs);
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--fg-2);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+}
+.result-param[hidden] { display: none; }
+.result-actions { display: flex; flex: none; align-items: center; gap: 4px; }
+.result-actions .ibtn {
+  width: 36px;
+  height: 36px;
+  --ico: 17px;
+  color: var(--fg-2);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.result-actions .ibtn:hover { color: var(--fg); background: var(--hover); border-color: var(--line-2); }
+.result-actions [data-tip]::after {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform: translate(0, 3px);
+}
+.result-actions [data-tip]:hover::after { transform: translate(0, 0); }
+
+/* ── Loading ──────────────────────────────────────────────────
+   Two parts, with a deliberate hierarchy:
+
+     .bar     small and bright — a sweeping-light progress bar on the top edge
+     .sheen   large and dark — a wide band of light travelling across the frame
+
+   Strength is inverse to area, and neither layer raises the base colour. Two
+   earlier attempts got this wrong in opposite directions: five bright rings from
+   three origins (nine independent motion parameters, none subordinate, read as
+   noise), then a flat fill over the whole frame (visible only by lifting every
+   pixel 10.8 dL* above the panel, read as a pale slab). A travelling highlight
+   over an untouched dark base is what leaves the frame looking deep.
+
+   The bar is indeterminate on purpose. The upstream is one POST and one blob
+   (api.js) with no step callback, and app.js already notes that duration
+   tracks queue depth rather than step count — so a bar that filled toward an
+   end would be fiction. It cycles instead. Real progress stays in the text and
+   the batch counter. */
+.skeleton {
+  display: grid; place-items: center;
+  width: var(--sk-w, 320px);
+  height: var(--sk-h, 460px);
+  /* faint top-down falloff so the panel is not a flat dark rectangle */
+  background:
+    linear-gradient(170deg, rgba(255, 255, 255, 0.026), transparent 62%),
+    var(--chrome);
+  animation: none;
+}
+
+/* Sweeping-light progress bar, pinned to the top edge of the frame. */
+.bar {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  contain: paint;
+  pointer-events: none;
+  z-index: 2;
+}
+/* Two full periods of the pattern, translated by exactly one — the loop is
+   seamless, so there is no dead frame at the wrap and no stutter at the seam.
+   Only transform animates, so it stays on the compositor. */
+.bar i {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  width: 200%;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(179, 161, 255, 0.30) 12%,
+    var(--bar-ink) 25%,
+    rgba(179, 161, 255, 0.30) 38%,
+    transparent 50%
+  );
+  will-change: transform;
+  animation: barSweep 1.5s linear infinite;
+}
+@keyframes barSweep {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+/* A wide, soft band of light travelling across the frame at an angle.
+
+   This replaces a flat fill that covered the whole frame. That fill had to raise
+   the base colour to be visible at all — every one of the frame's ~429k pixels
+   sat 10.8 dL* above the panel, with chroma pushed from 4 to 18 — so it read as
+   a pale lilac slab. Depth needs the base to stay dark and only a highlight to
+   move: here the band peaks around L* 21 where it passes, while everywhere else
+   keeps the panel's own L* 8.41.
+
+   Seamless by construction: the pattern repeats every 100% of the frame width
+   and travels exactly one period, so a new band enters as the previous one
+   leaves. The first sweep this project shipped parked its band off-panel for 38%
+   of the cycle (1.10s of dead air); there is no dead phase here.
+
+   Feathering comes from wide gradient ramps rather than a blur filter — this
+   element is four frames wide, and blur cost scales with area. */
+.sheen {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  contain: paint;
+  pointer-events: none;
+}
+.sheen::before {
+  content: "";
+  position: absolute;
+  /* Oversized vertically so the tilt never exposes a corner. */
+  top: -60%; bottom: -60%;
+  /* 56%, not 40%: only the middle of the gradient is bright enough to register,
+     so a 40% band lit the frame for just 19% of the cycle and the pass read as a
+     blink rather than a sweep. */
+  left: 0; width: 56%;
+  /* ONE band. This was a repeating gradient four periods wide, which meant four
+     highlights were on the frame at once, marching in file — a queue, not a
+     sweep. A sheen is a single pass. */
+  background: linear-gradient(
+    90deg,
+    rgba(214, 205, 255, 0) 0%,
+    rgba(214, 205, 255, 0.02) 18%,
+    rgba(214, 205, 255, 0.07) 38%,
+    var(--sheen-ink) 50%,
+    rgba(214, 205, 255, 0.07) 62%,
+    rgba(214, 205, 255, 0.02) 82%,
+    rgba(214, 205, 255, 0) 100%
+  );
+  will-change: transform;
+  animation: sheenSweep 2.8s cubic-bezier(0.45, 0.05, 0.35, 1) infinite;
+}
+/* Crosses in the first 42% (~1.2s) and then waits out the rest off-frame, so
+   each pass is a distinct event with quiet between. The earlier note here said
+   an eased loop "stutters at the seam" — true only for a continuous repeat,
+   where the curve restarts mid-frame. With the band parked off-frame during the
+   gap there is no seam on screen, which is what lets it be eased at all: it
+   accelerates in, is quickest across the middle, and decelerates out, the way a
+   highlight tracks across a surface being tilted.
+
+   Offsets are percentages of the band's own 40% width: -120% clears the left
+   edge, 300% clears the right. */
+@keyframes sheenSweep {
+  0%   { transform: translate3d(-110%, 0, 0) rotate(14deg); }
+  52%  { transform: translate3d(190%, 0, 0) rotate(14deg); }
+  100% { transform: translate3d(190%, 0, 0) rotate(14deg); }
+}
+
+/* .print zeroes line-height to kill the <img> baseline gap, and the skeleton
+   reuses .print — so both lines here inherited line-height:0, collapsed to zero
+   height, and their glyphs overlapped by 9px while `gap` did nothing (it was
+   spacing zero-height boxes). Restore a line box locally; .print keeps its own
+   rule for the image case. */
+/* The clock and the parameter line are announced, not shown (.sr-only on the
+   wrapper), so they need no visual treatment. Their former centring, sizing and
+   contrast rules are gone with them — including the line-height override that
+   used to be needed here, since .print zeroes line-height for the <img> case
+   and a clipped 1px box has no line box to collapse. */
+
+
+/* ── Lightbox ────────────────────────────────────────────────── */
+.lightbox {
+  position: fixed; inset: 0; z-index: var(--z-scrim);
+  display: grid; place-items: center;
+  padding: var(--sp-6);
+  background: rgba(6, 6, 8, 0.95);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity var(--t2) var(--e);
+  cursor: zoom-out;
+}
+.lightbox[hidden] { display: none; }
+body[data-zoom="on"] .lightbox { opacity: 1; }
+.lightbox img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--r2);
+  box-shadow: 0 30px 90px -20px rgba(0,0,0,.9);
+  transform: scale(0.97);
+  transition: transform var(--t3) var(--e-out);
+}
+body[data-zoom="on"] .lightbox img { transform: none; }
+.lightbox-x { position: fixed; top: var(--sp-4); right: var(--sp-4); cursor: pointer; }
+
+
+/* ── Toasts ──────────────────────────────────────────────────── */
+.toasts {
+  position: fixed; z-index: var(--z-toast);
+  bottom: var(--sp-4); left: 50%;
+  transform: translateX(-50%);
+  display: grid; gap: var(--sp-2);
+  width: min(440px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  display: flex; gap: 9px;
+  padding: 9px var(--sp-3);
+  font-size: var(--fz-sm); line-height: 1.5;
+  color: var(--fg-2);
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r2);
+  box-shadow: var(--sh-2);
+  animation: toastIn var(--t2) var(--e-out);
+}
+.toast::before { content: ""; flex: none; width: 2px; margin: 1px 0; border-radius: 2px; background: var(--fg-4); }
+.toast.err::before { background: var(--err); }
+.toast.ok::before { background: var(--ok); }
+.toast.out { animation: toastOut var(--t1) var(--e) forwards; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(4px); } }
+
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* The rule above freezes every animation on its first frame, so that frame has
+     to stand on its own. A travelling band fails that by default: frame one has
+     the band off-panel, which is the dead rectangle this project already shipped
+     once. Replace the sweep with a single static band across the frame — the
+     highlight still reads, it just does not move. */
+  .bar i { animation: none !important; transform: none !important; width: 100% !important; }
+  .sheen::before {
+    animation: none !important;
+    top: 0 !important; bottom: 0 !important;
+    left: 0 !important; width: 100% !important;
+    transform: none !important;
+    background: linear-gradient(
+      100deg,
+      rgba(214, 205, 255, 0) 34%,
+      rgba(214, 205, 255, 0.05) 44%,
+      var(--sheen-ink) 50%,
+      rgba(214, 205, 255, 0.05) 56%,
+      rgba(214, 205, 255, 0) 66%
+    ) !important;
+  }
+}
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }

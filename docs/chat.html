@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex">
+  <title>对话绘图 · Scylla</title>
+  <link rel="icon" href="./assets/scylla-icon-small.png">
+  <link rel="preload" href="./fonts/manrope/files/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./fonts/manrope/index.css">
+  <link rel="stylesheet" href="./fonts/noto-sans-sc/index.css">
+  <link rel="stylesheet" href="./fonts/jetbrains-mono/index.css">
+  <link rel="stylesheet" href="./ui.css">
+  <link rel="stylesheet" href="./chat.css">
+</head>
+<body class="chat-page">
+  <div class="chat-app" id="chatApp">
+    <header class="topbar">
+      <div class="brand"><img class="brand-mark" src="./assets/scylla-icon-small.png" width="30" height="30" alt=""><span class="brand-wordmark"><span class="brand-title">Scylla</span><span class="brand-subtitle">IMAGE</span></span></div>
+      <div class="meters" id="chatMeters"><button type="button" class="meter" id="quotaButton" aria-label="查看媒体额度"><svg class="ico meter-icon" aria-hidden="true"><use href="./assets/icons.svg#i-points" /></svg><span class="meter-k" id="quotaKind">FREE</span><span class="meter-v"><b id="quotaLeft">—</b><i id="quotaTotal"></i></span><span class="meter-bar"><i id="quotaFill"></i></span></button></div>
+      <span class="workspace-label">对话绘图</span>
+      <button class="ibtn chat-menu" id="menuButton" type="button" aria-label="打开会话与工具" aria-expanded="false" aria-controls="chatSidebar"><svg class="ico"><use href="./assets/icons.svg#i-menu" /></svg></button>
+    </header>
+    <div class="chat-layout">
+      <button id="sidebarBackdrop" class="chat-sidebar-backdrop" type="button" aria-label="关闭侧栏" hidden></button>
+      <aside class="chat-sidebar" id="chatSidebar" aria-label="会话与工具">
+        <div class="sidebar-heading"><span>对话绘图</span><button type="button" class="ibtn sidebar-close" id="closeSidebar" aria-label="关闭侧栏"><svg class="ico"><use href="./assets/icons.svg#i-close" /></svg></button></div>
+        <button class="btn btn-quiet new-conversation" id="newConversation" type="button"><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-plus" /></svg>新对话</button>
+        <nav id="conversationList" class="conversation-list" aria-label="会话列表"></nav>
+        <div class="sidebar-tools">
+          <a href="./index.html" target="_blank" rel="noopener" class="btn btn-quiet"><svg class="ico solid" aria-hidden="true"><use href="./assets/icons.svg#i-parameters" /></svg>NAI 绘图</a>
+          <button type="button" class="btn btn-quiet" id="keyButton"><svg class="ico"><use href="./assets/icons.svg#i-lock" /></svg>API Key</button>
+          <button type="button" class="btn btn-quiet" id="deleteConversation"><svg class="ico"><use href="./assets/icons.svg#i-trash" /></svg>删除当前对话</button>
+          <p class="sidebar-note">本次会话保留 · 刷新后清空</p>
+        </div>
+      </aside>
+      <main class="chat-workspace">
+        <div class="chat-scroll" id="chatScroll" tabindex="0" aria-label="绘图消息">
+          <div class="chat-empty" id="chatEmpty"><svg class="ico ico-xl" aria-hidden="true"><use href="./assets/icons.svg#i-image" /></svg><h1>从一张图，继续想象</h1><p>描述画面，或上传图片开始修改。</p></div>
+          <div id="messageList" class="message-list"></div>
+        </div>
+        <button class="btn btn-quiet latest-button" type="button" id="latestButton" hidden>查看最新结果 ↓</button>
+        <form class="chat-composer generation-form" id="chatForm">
+          <div class="chat-attachments" id="attachmentList" aria-label="本轮图片"></div>
+          <div class="composer-context"><button type="button" id="contextButton" class="context-button" aria-label="查看本轮上下文" title="本轮上下文"><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-layers" /></svg><span id="contextTurnCount">0</span><span class="context-divider" aria-hidden="true"></span><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-image" /></svg><span id="contextImageCount">0</span></button><span id="phaseText" role="status" aria-live="polite"></span></div>
+          <label class="sr-only" for="chatPrompt">描述或修改要求</label>
+          <textarea id="chatPrompt" rows="2" maxlength="24000" placeholder="描述画面，或说说这次想怎么改…"></textarea>
+          <div class="chat-composer-bottom">
+            <button class="ibtn" type="button" id="uploadButton" aria-label="上传参考图片" title="上传参考图片"><svg class="ico"><use href="./assets/icons.svg#i-plus" /></svg></button>
+            <input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" multiple hidden>
+            <label class="model-field"><svg class="ico solid" aria-hidden="true"><use href="./assets/icons.svg#i-model" /></svg><span class="sr-only">模型</span><select id="chatModel" aria-label="绘图模型"><option>正在读取模型…</option></select></label>
+            <div id="quickOptions" class="quick-options"></div>
+            <button class="ibtn" type="button" id="settingsButton" aria-label="质量、画幅与设置" title="质量、画幅与设置"><svg class="ico solid"><use href="./assets/icons.svg#i-settings" /></svg></button>
+            <button class="btn btn-primary btn-go chat-send" id="sendButton" type="submit" aria-label="发送绘图请求" aria-describedby="quoteText" title="发送 · ⌘/Ctrl Enter" disabled><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-send" /></svg></button>
+            <span class="sr-only" id="quoteText"></span>
+            <button class="btn btn-cancel chat-stop" id="stopButton" type="button" aria-label="停止生成" title="停止生成" hidden><svg class="ico" aria-hidden="true"><use href="./assets/icons.svg#i-stop" /></svg></button>
+          </div>
+          <p class="chat-inline-error" id="composerError" role="status"></p>
+        </form>
+      </main>
+    </div>
+  </div>
+  <dialog id="settingsDialog" class="chat-dialog"><form method="dialog" class="dialog-title"><h2>绘图设置</h2><button class="ibtn" aria-label="关闭设置"><svg class="ico"><use href="./assets/icons.svg#i-close" /></svg></button></form><div id="settingsFields" class="settings-fields"></div><p class="dialog-note" id="modelNote"></p></dialog>
+  <dialog id="contextDialog" class="chat-dialog"><form method="dialog" class="dialog-title"><h2>本轮上下文</h2><button class="ibtn" aria-label="关闭上下文"><svg class="ico"><use href="./assets/icons.svg#i-close" /></svg></button></form><label class="context-limit">带入文字轮数<input id="contextTurns" type="number" min="0" step="1" value="0"><small>0 为全部；只带入当前分支。</small></label><div id="contextContent"></div><button type="button" class="btn btn-quiet" id="resetContext">重置上下文</button></dialog>
+  <dialog id="quotaDialog" class="chat-dialog"><form method="dialog" class="dialog-title"><h2>媒体额度</h2><button class="ibtn" aria-label="关闭额度"><svg class="ico"><use href="./assets/icons.svg#i-close" /></svg></button></form><div id="quotaDetails"></div></dialog>
+  <dialog id="keyDialog" class="chat-dialog"><form id="keyForm" class="settings-fields"><div class="dialog-title"><h2 id="keyTitle">连接 Scylla</h2><button type="button" class="ibtn" id="closeKey" aria-label="关闭"><svg class="ico"><use href="./assets/icons.svg#i-close" /></svg></button></div><label id="keyInputField">API Key<input id="keyInput" type="password" autocomplete="off" placeholder="sk-…"></label><label id="keyModeField">保存方式<select id="keyMode"><option value="encrypted">口令加密</option><option value="session">仅本标签页</option></select></label><label id="keyPassField">口令<input type="password" id="keyPass" autocomplete="current-password" minlength="4"></label><label class="remember-key" id="rememberField"><input type="checkbox" id="rememberKey"> 本标签页保持解锁</label><p class="chat-inline-error" id="keyError" role="alert"></p><button type="submit" class="btn btn-primary" id="connectButton">连接</button><button type="button" class="btn btn-quiet" id="forgetKey">更换 Key</button></form></dialog>
+  <dialog id="imageDialog" class="chat-lightbox"><button class="ibtn" id="closeImage" type="button" aria-label="关闭图片"><svg class="ico"><use href="./assets/icons.svg#i-close" /></svg></button><img id="fullImage" alt="生成图片大图"></dialog>
+  <div id="chatToast" class="chat-toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="./js/chat-page.js"></script>
+</body>
+</html>
