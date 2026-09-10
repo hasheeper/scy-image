@@ -42,6 +42,10 @@ export function completeVersion(conversation, turn, version, blocks, quote, sele
   if (!blocks.some(b => b.type === "image")) throw new Error("结果没有图片");
   Object.assign(version, { status: "done", blocks, quote });
   if (conversation.selectionRevision === selectionRevision) {
+    // Keep inputs visible until a valid result exists. Consume only references
+    // used by this turn; pinned images and any manually changed draft survive.
+    const sent = new Set(turn.snapshot.imageIds);
+    conversation.attachments = conversation.attachments.filter(assetId => !sent.has(assetId));
     conversation.headId = turn.id;
     conversation.mainId = blocks.find(b => b.type === "image").assetId;
   }

@@ -327,7 +327,7 @@ async function execute(existingTurn) {
       if (existingTurn) { turn = existingTurn; version = beginVersion(turn); }
       else {
         ({ turn, version } = beginTurn(c, prepared.snapshot, prepared.prompt, prepared.settings));
-        c.prompt = ""; c.attachments = [];
+        c.prompt = "";
         if (current === c) { $("chatPrompt").value = ""; resizePrompt(); }
       }
       const revision = c.selectionRevision;

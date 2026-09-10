@@ -225,6 +225,41 @@ try {
   await dp.waitForFunction(() => !document.getElementById("sendButton").disabled);
   await dp.locator("#sendButton").click();
   await dp.locator(".chat-print").waitFor();
+  // Sending an upload must not clear it before the image request succeeds.
+  const retained = await context.newPage(); retained.on("pageerror", e => errors.push(e.message));
+  await retained.goto(origin + "/chat.html");
+  await retained.waitForFunction(() => document.querySelectorAll("#chatModel option").length === 4);
+  await retained.locator("#imageUpload").setInputFiles({ name: "保留参考.png", mimeType: "image/png", buffer: png(72, 88) });
+  await retained.locator(".attachment").waitFor();
+  const original = await retained.locator(".attachment img").getAttribute("src");
+  const assertInputRetained = async () => {
+    assert.equal(await retained.locator(".attachment").count(), 1);
+    assert.equal(await retained.locator(".attachment img").getAttribute("src"), original);
+  };
+  mock.state.failure = true; mock.state.jsonImage = false; mock.state.delay = 1400;
+  await retained.locator("#chatPrompt").fill("测试失败后保留附件");
+  await retained.waitForFunction(() => !document.getElementById("sendButton").disabled);
+  await retained.locator("#sendButton").click();
+  await retained.locator(".chat-pending").waitFor(); await assertInputRetained();
+  await retained.locator(".turn-error").waitFor(); await assertInputRetained();
+  mock.state.failure = false;
+  await retained.locator(".turn-error button").click();
+  await retained.locator(".chat-pending").waitFor(); await assertInputRetained();
+  await retained.locator("#stopButton").click();
+  await retained.waitForFunction(() => document.getElementById("stopButton").hidden);
+  await assertInputRetained();
+  mock.state.badImage = true;
+  await retained.locator(".turn-error button").click();
+  await retained.locator(".chat-pending").waitFor();
+  await retained.locator(".turn-error").waitFor(); await assertInputRetained();
+  assert.match(await retained.locator(".turn-error").innerText(), /图片加载失败/);
+  mock.state.badImage = false;
+  await retained.locator(".turn-error button").click();
+  await retained.locator(".chat-print").waitFor();
+  await retained.waitForFunction(() => document.getElementById("stopButton").hidden);
+  assert.equal(await retained.locator(".attachment").count(), 1);
+  assert.notEqual(await retained.locator(".attachment img").getAttribute("src"), original);
+  assert.equal(await retained.locator(".chat-turn").count(), 1);
   assert.deepEqual(errors, []);
   console.log(`Browser checks passed. Screenshots: ${screenshots}`);
 } finally {
