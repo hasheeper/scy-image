@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeCatalog, normalizeOptions, resolveModel, buildChatPayload, validatePayload } from "../docs/js/model-catalog.js";
+import { normalizeCatalog, normalizeOptions, resolveModel, buildChatPayload, validatePayload, quotaBadge } from "../docs/js/model-catalog.js";
 import { rawCatalog, png, mockUpstream, listen } from "./fixtures.mjs";
 import { createAppServer } from "../server.mjs";
 const catalog = normalizeCatalog(rawCatalog);
@@ -12,6 +12,17 @@ test("catalog migration, quality and resolution capability intersection", () => 
   assert.equal(normalizeOptions(gpt, { quality: "max" }).quality, "auto");
   assert.equal(normalizeOptions(catalog.models.find(m => m.name.includes("Sunburst")), { quality: "max" }).quality, "max");
   assert.deepEqual(catalog.models.find(m => m.name.includes("Lite")).fields.image_size.options, ["1K"]);
+});
+test("the quota gauge is named after the pool it measures", () => {
+  const nai = catalog.models.find(m => m.id === "nai-diffusion-5-full@local");
+  assert.equal(quotaBadge(gpt).label, "OpenAI");
+  assert.equal(quotaBadge(gpt).icon, "openai");
+  assert.equal(quotaBadge(gemini).label, "Gemini");
+  assert.equal(quotaBadge(nai).label, "NovelAI");
+  // Credits are one cross-provider currency, so paid work drops the brand mark.
+  assert.equal(quotaBadge(gpt, true).label, "积分");
+  assert.equal(quotaBadge(gpt, true).icon, "points");
+  assert.equal(quotaBadge(null).label, "额度");
 });
 test("wire payloads keep NAI and GPT/Gemini parameters separate", () => {
   const payload = buildChatPayload(gpt, "edit", { quality: "high", steps: 20 }, [image]);

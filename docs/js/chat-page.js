@@ -1,7 +1,7 @@
 import { vault } from "./vault.js";
 import { detectMode, state as transport } from "./transport.js";
 import { fetchMediaCatalog, fetchMediaQuota, quotaForModel, estimateImage, runImage, quoteLabel } from "./media-api.js";
-import { chatModels, normalizeOptions, resolveModel, buildChatPayload } from "./model-catalog.js";
+import { chatModels, normalizeOptions, resolveModel, buildChatPayload, quotaBadge } from "./model-catalog.js";
 import { newConversation, contextSnapshot, beginTurn, beginVersion, completeVersion, selectSource } from "./conversation-store.js";
 import { AssetStore } from "./image-attachments.js";
 import { withGenerationLock } from "./generation-lock.js";
@@ -387,12 +387,22 @@ function renderQuota() {
   const model = selectedModel(), group = quotaForModel(media, model), paid = quote?.cost > 0;
   const remaining = paid ? media?.credits?.remaining : group?.remaining;
   const limit = paid ? null : group?.limit;
-  $("quotaKind").textContent = paid ? "CREDITS" : "FREE";
+  // Name the pool being measured, and mark it with that provider's own glyph:
+  // "FREE" told the user the price, never whose allowance was draining.
+  const badge = quotaBadge(model, paid);
+  $("quotaIcon").setAttribute("href", `./assets/icons.svg#i-${badge.icon}`);
+  $("quotaKind").textContent = badge.label;
   $("quotaLeft").textContent = Number.isFinite(remaining) ? remaining.toLocaleString("zh-CN", { maximumFractionDigits: 1 }) : "—";
   $("quotaTotal").textContent = Number.isFinite(limit) ? `/${limit}` : "";
-  $("quotaFill").style.width = Number.isFinite(remaining) && limit > 0 ? `${Math.min(100, Math.max(0, remaining / limit * 100))}%` : "0%";
-  $("quotaButton").setAttribute("aria-label", `${model?.name || "当前模型"}，${paid ? "媒体积分" : "本周免费图片"}剩余 ${remaining ?? "未知"}，查看额度详情`);
-  const rows = [["当前模型", model?.name || "—"], ["本周免费图片", `${group?.remaining ?? "—"} / ${group?.limit ?? "—"}`],
+  const ratio = Number.isFinite(remaining) && limit > 0 ? Math.min(1, Math.max(0, remaining / limit)) : null;
+  $("quotaFill").style.width = ratio === null ? "0%" : `${(ratio * 100).toFixed(1)}%`;
+  // Colour is the whole point of a gauge; the chat page never set this, so a
+  // nearly exhausted allowance looked identical to a full one.
+  $("quotaButton").dataset.level = ratio === null ? "unknown" : ratio <= 0.1 ? "crit" : ratio <= 0.25 ? "low" : "ok";
+  $("quotaButton").dataset.brand = paid ? "credits" : model?.provider || "";
+  $("quotaButton").setAttribute("aria-label", `${model?.name || "当前模型"}，${badge.pool}剩余 ${remaining ?? "未知"}，查看额度详情`);
+  $("quotaButton").dataset.tip = `${model?.name || "当前模型"} · ${badge.pool}：${remaining ?? "未知"}${Number.isFinite(limit) ? ` / ${limit}` : ""}`;
+  const rows = [["当前模型", model?.name || "—"], [badge.pool === "媒体积分" ? "本周免费图片" : badge.pool, `${group?.remaining ?? "—"} / ${group?.limit ?? "—"}`],
     ["媒体积分", media?.credits?.remaining ?? "—"], ["重置时间", media?.resets_at ? new Date(media.resets_at).toLocaleString() : "—"]];
   $("quotaDetails").replaceChildren(...rows.map(([key, value]) => {
     const row = el("div", { class: "quota-row" }); row.append(el("span", {}, key), el("span", {}, value)); return row;

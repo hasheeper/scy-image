@@ -834,7 +834,9 @@ body[data-drop="on"] .dropzone-card { transform: none; }
   .brand-subtitle { font-size: 9px; letter-spacing: 0.1em; }
   .meter { min-width: 138px; padding: 5px 9px 6px; }
   .meter-icon { width: 18px; height: 18px; }
-  .meter-k { font-size: 9px; letter-spacing: 0.06em; }
+  /* Provider names are mixed case; the wide tracking here was tuned for the
+     old all-caps FREE/POINTS and now just loosens a proper noun. */
+  .meter-k { font-size: 9.5px; letter-spacing: 0.01em; }
   .meter-v b { font-size: var(--fz-xs); }
 
   .topbar-menu-toggle {

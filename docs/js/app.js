@@ -1,6 +1,6 @@
 import { vault } from "./vault.js";
 import { detectMode, fetchCatalog, fetchQuotaStatus, generate, estimateNAI, state as api, DEFAULT_MODEL, FALLBACK_MAX_PIXELS } from "./api.js";
-import { resolveModel } from "./model-catalog.js";
+import { resolveModel, quotaBadge } from "./model-catalog.js";
 import { quoteLabel } from "./media-api.js";
 import { withGenerationLock } from "./generation-lock.js";
 import { history, prefs, makeThumb } from "./store.js";
@@ -546,8 +546,14 @@ function syncMeters() {
   const when = Number.isFinite(reset) && reset > 0
     ? `，约 ${reset >= 3600 ? `${Math.round(reset / 3600)} 小时` : `${Math.max(1, Math.round(reset / 60))} 分钟`}后重置`
     : "";
-  $("meterPoints").querySelector(".meter-k").textContent = paid ? "CREDITS" : "FREE";
-  $("meterPoints").dataset.tip = `${activeModel()?.name || "当前模型"} · ${paid ? "媒体积分" : "本周免费图片"}：${meterNumber(remaining)}；重置 ${quotaStatus?.media?.resets_at || "未知"}。临时 Key 日请求剩余 ${meterNumber(policy.tempRemaining)}${when}`;
+  // The gauge names the pool it measures. This page only ever draws NovelAI
+  // models, so free images are NovelAI's allowance; paid work spends the
+  // cross-provider credit balance instead.
+  const badge = quotaBadge(activeModel(), paid);
+  $("ptIcon").setAttribute("href", `./assets/icons.svg#i-${badge.icon}`);
+  $("meterPoints").querySelector(".meter-k").textContent = badge.label;
+  $("meterPoints").dataset.brand = paid ? "credits" : activeModel()?.provider || "";
+  $("meterPoints").dataset.tip = `${activeModel()?.name || "当前模型"} · ${badge.pool}：${meterNumber(remaining)}；重置 ${quotaStatus?.media?.resets_at || "未知"}。临时 Key 日请求剩余 ${meterNumber(policy.tempRemaining)}${when}`;
   $("meters").dataset.loading = quotaLoading ? "1" : "0";
 }
 

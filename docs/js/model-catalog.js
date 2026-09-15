@@ -39,6 +39,21 @@ export function normalizeCatalog(raw) {
     samplers: raw?.valid_samplers?.length ? raw.valid_samplers : ["k_euler_ancestral"] };
 }
 
+/* A quota gauge measures one specific pool, so it should be named after that
+   pool rather than after "free vs paid". Free images are billed per provider
+   (quota_group), while media credits are one cross-provider currency — hence
+   the neutral star for credits and a brand mark for each provider. */
+const PROVIDER_BADGES = {
+  openai: { label: "OpenAI", icon: "openai", pool: "OpenAI 本周免费图片" },
+  gemini: { label: "Gemini", icon: "points", pool: "Gemini 本周免费图片" },
+  novelai: { label: "NovelAI", icon: "points", pool: "NovelAI 本周免费图片" }
+};
+export const CREDIT_BADGE = { label: "积分", icon: "points", pool: "媒体积分" };
+export function quotaBadge(model, paid = false) {
+  if (paid) return CREDIT_BADGE;
+  return PROVIDER_BADGES[model?.provider] || { label: "额度", icon: "points", pool: "额度" };
+}
+
 export function resolveModel(models, wanted) {
   const exact = models.find(m => m.id === wanted);
   if (exact) return exact;

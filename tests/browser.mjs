@@ -37,6 +37,16 @@ try {
   page.once("dialog", dialog => dialog.dismiss());
   await page.locator("#deleteConversation").click();
   assert.equal(await page.locator(".conversation-item").count(), 1);
+  // The gauge names the provider whose allowance it measures, with that
+  // provider's own mark, and colours itself by how much is left.
+  assert.equal(await page.locator("#quotaKind").innerText(), "OpenAI");
+  assert.match(await page.locator("#quotaIcon").getAttribute("href"), /#i-openai$/);
+  assert.equal(await page.locator("#quotaLeft").innerText(), "500");
+  assert.equal(await page.locator("#quotaButton").getAttribute("data-level"), "ok");
+  await page.locator("#chatModel").selectOption("gemini-3.1-flash-image@local");
+  assert.equal(await page.locator("#quotaKind").innerText(), "Gemini");
+  assert.match(await page.locator("#quotaIcon").getAttribute("href"), /#i-points$/);
+  await page.locator("#chatModel").selectOption("gpt-image-2@local");
   assert.equal((await page.locator("#sendButton").innerText()).trim(), "");
   assert.match(await page.locator("#sendButton use").getAttribute("href"), /#i-send$/);
   assert.ok(await page.getByRole("button", { name: "发送绘图请求", exact: true }).count());
@@ -174,6 +184,8 @@ try {
   // Existing NAI page remains functional with shared assets and the new routes.
   const nai = await context.newPage(); nai.on("pageerror", e => errors.push(e.message));
   await nai.goto(origin + "/"); await nai.waitForFunction(() => document.getElementById("ptLeft").textContent === "248");
+  assert.equal(await nai.locator("#meterPoints .meter-k").innerText(), "NovelAI");
+  assert.equal(await nai.locator("#meterPoints").getAttribute("data-level"), "ok");
   await nai.screenshot({ path: path.join(screenshots, "nai-current.png") });
   await nai.locator("#model").selectOption("nai-diffusion-4-5-full@local");
   await nai.waitForFunction(() => document.getElementById("ptLeft").textContent === "1999");

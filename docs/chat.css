@@ -112,7 +112,7 @@
   .chat-page .brand-wordmark { gap: 6px; }
   .chat-page .meters { margin-left: 12px; }
   .chat-page .meter { min-width: 132px; padding: 5px 8px 6px; }
-  .chat-page .meter-k { font-size: 9px; }
+  .chat-page .meter-k { font-size: 9.5px; letter-spacing: 0.01em; }
   .chat-page .meter-v b { font-size: 12px; }
   .chat-menu { display: grid; }
   .chat-tools-slot { display: block; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
