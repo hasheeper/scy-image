@@ -2,7 +2,7 @@ import { vault } from "./vault.js";
 import { detectMode, state as transport } from "./transport.js";
 import { fetchMediaCatalog, fetchMediaQuota, quotaForModel, estimateImage, runImage, quoteLabel } from "./media-api.js";
 import { chatModels, normalizeOptions, resolveModel, buildChatPayload, quotaBadge } from "./model-catalog.js";
-import { newConversation, contextSnapshot, beginTurn, beginVersion, completeVersion, selectSource } from "./conversation-store.js";
+import { newConversation, contextSnapshot, beginTurn, beginVersion, completeVersion, selectSource, attachUpload, retainImage, forgetImage, reorderRefs } from "./conversation-store.js";
 import { AssetStore } from "./image-attachments.js";
 import { withGenerationLock } from "./generation-lock.js";
 
@@ -97,8 +97,11 @@ function renderOptions() {
   current.settings.options = normalizeOptions(model, current.settings.options);
   $("quickOptions").replaceChildren(...Object.keys(model.fields).filter(k => ["quality", "size", "aspect_ratio", "image_size"].includes(k)).slice(0, 2).map(k => optionField(model, k, true)));
   $("settingsFields").replaceChildren(...Object.keys(model.fields).map(k => optionField(model, k)));
-  $("modelNote").textContent = model.id.includes("lite-image") ? "Lite 仅提供 1K 输出，最多带入 1 张参考图。"
-    : `最多带入 ${model.maxImages} 张图片，包含主图。参数以本模型能力为准。`;
+  // The ceiling is min(provider rule, gateway cap), so it is read rather than
+  // hardcoded per model id — the gateway can lower it at any time.
+  $("modelNote").textContent = model.maxImages === 1
+    ? `${model.id.includes("lite-image") ? "Lite 仅提供 1K 输出；" : ""}每轮只能带 1 张图，无法附加参考图。`
+    : `每轮最多带 ${model.maxImages} 张图，含底图。参数以本模型能力为准。`;
 }
 function renderModel() {
   if (!models.length) return;
@@ -106,31 +109,51 @@ function renderModel() {
   $("chatModel").value = current.settings.model;
   renderOptions(); renderQuota();
 }
-function imageIds(c = current) { return contextSnapshot(c).imageIds; }
+const imageCap = (c = current) => selectedModel(c)?.maxImages ?? Infinity;
+function snapshotFor(c = current, prompt = c.prompt) { return contextSnapshot(c, prompt, imageCap(c)); }
+function imageIds(c = current) { return snapshotFor(c).imageIds; }
 function changedContext() {
   current.selectionRevision += 1;
   renderAttachments(); scheduleQuote();
   if ($("contextDialog").open) renderContext();
 }
+/* One source of truth for how an image is described, so the composer tooltip
+   and the panel's badges can never drift apart. */
+function imageFacts(id, { slot, index } = {}) {
+  const badges = [];
+  if (current.pinnedIds.includes(id)) badges.push({ text: "已固定" });
+  return { rank: slot === "base" || (!slot && current.mainId === id) ? "底图" : slot ? `参考 ${index + 1}` : "参考",
+    origin: assets.assets.get(id)?.origin === "result" ? "模型结果" : "你上传的", badges };
+}
 function imageRole(id) {
-  return [current.mainId === id ? "主图" : "", current.pinnedIds.includes(id) ? "固定参考" : ""].filter(Boolean).join(" · ") || "本轮参考";
+  const facts = imageFacts(id);
+  return [facts.rank, facts.origin, ...facts.badges.map(b => b.text)].join(" · ");
 }
 function removeReference(id) {
-  if (current.mainId === id) current.mainId = null;
-  current.pinnedIds = current.pinnedIds.filter(x => x !== id);
-  current.attachments = current.attachments.filter(x => x !== id);
+  forgetImage(current, id);
   changedContext(); collectAssets();
 }
+function setBase(id) {
+  // Demoting the old base to a reference keeps it in context; on single-image
+  // models there is no room for it, so it leaves rather than silently ranking
+  // ahead of the image the user just chose.
+  const previous = current.mainId;
+  current.mainId = id;
+  if (previous && previous !== id && imageCap() > 1) retainImage(current, previous);
+  changedContext();
+}
 function renderAttachments() {
-  // The strip is a staging area for what the user placed there themselves.
-  // The chain's main image (usually the previous result) still rides along in
-  // the request, but it lives in the context panel — echoing it here made
-  // every success look like the model's output "came back" into the composer.
-  const ids = imageIds().filter(id => id !== current.mainId || current.pinnedIds.includes(id) || current.attachments.includes(id));
+  // The strip is a staging area for what the user placed there this turn.
+  // Everything already travelling with the conversation — the base image and
+  // retained references — lives in the context panel, because echoing it here
+  // made every success look like the model's output "came back" to the composer.
+  const ids = current.attachments.filter(id => assets.assets.has(id));
+  const carried = new Set(imageIds());
   $("attachmentList").replaceChildren(...ids.map(id => {
     const asset = assets.get(id);
     const card = el("div", { class: "attachment" });
-    const preview = el("button", { type: "button", class: "attachment-preview", title: `${imageRole(id)} · ${asset.name}`, "aria-label": `查看参考图片：${asset.name}` });
+    if (!carried.has(id)) card.dataset.dropped = "true";
+    const preview = el("button", { type: "button", class: "attachment-preview", title: `${imageRole(id)}${carried.has(id) ? "" : " · 超出本模型上限，不会带入"} · ${asset.name}`, "aria-label": `查看参考图片：${asset.name}` });
     preview.append(el("img", { src: asset.url, alt: "", width: 96, height: 96 }));
     preview.onclick = () => showImage(id);
     const remove = action("移除参考图片", "close", () => {
@@ -142,42 +165,93 @@ function renderAttachments() {
     remove.classList.add("attachment-remove");
     card.append(preview, remove); return card;
   }));
-  const snapshot = contextSnapshot(current);
+  const snapshot = snapshotFor();
+  const cap = imageCap(), dropped = snapshot.dropped.length;
   $("contextTurnCount").textContent = snapshot.turnIds.length;
   $("contextImageCount").textContent = snapshot.imageIds.length;
-  $("contextButton").setAttribute("aria-label", `查看上下文：${snapshot.turnIds.length} 轮文字、${snapshot.imageIds.length} 张图片`);
-  $("contextButton").title = `上下文：${snapshot.turnIds.length} 轮文字、${snapshot.imageIds.length} 张图片`;
+  // An overflow badge on the entry point, because the panel is closed most of
+  // the time and dropping images silently is the failure we are fixing.
+  $("contextButton").dataset.overflow = dropped ? String(dropped) : "";
+  $("contextButton").classList.toggle("has-overflow", dropped > 0);
+  const capText = Number.isFinite(cap) ? `，本模型上限 ${cap} 张` : "";
+  const overflowText = dropped ? `，${dropped} 张超出上限不会带入` : "";
+  $("contextButton").setAttribute("aria-label", `查看上下文：${snapshot.turnIds.length} 轮文字、${snapshot.imageIds.length} 张图片${capText}${overflowText}`);
+  $("contextButton").title = `上下文：${snapshot.turnIds.length} 轮文字、${snapshot.imageIds.length} 张图片${capText}${overflowText}`;
+}
+function contextRow(id, { slot, index, refs, dropped = false }) {
+  const asset = assets.get(id);
+  const row = el("div", { class: "context-image", "data-asset": id, "data-slot": slot });
+  if (dropped) row.dataset.dropped = "true";
+  const details = el("div", { class: "context-image-details" });
+  const facts = imageFacts(id, { slot, index });
+  const label = el("span", { class: "context-image-role" });
+  label.append(el("b", {}, facts.rank), el("i", {}, facts.origin));
+  for (const badge of facts.badges) label.append(el("em", {}, badge.text));
+  if (dropped) label.append(el("em", { class: "context-image-warn" }, "超出上限，不带入"));
+  details.append(label, el("small", { title: asset.name }, asset.name));
+  const controls = el("div", { class: "context-image-actions" });
+  const restoreFocus = name => $("contextContent").querySelector(`[data-asset="${id}"] [aria-label="${name}"]`)?.focus();
+  if (slot === "base") {
+    const pin = action("固定底图", "pin", () => { togglePin(id); restoreFocus("固定底图"); });
+    pin.setAttribute("aria-pressed", String(current.pinnedIds.includes(id)));
+    controls.append(pin);
+  } else {
+    const up = action("上移一位", "up", () => { moveRef(refs, id, -1); restoreFocus("上移一位"); });
+    const down = action("下移一位", "down", () => { moveRef(refs, id, 1); restoreFocus("下移一位"); });
+    up.disabled = index === 0; down.disabled = index === refs.length - 1;
+    const base = action("设为底图", "image", () => setBase(id));
+    const pin = action("固定参考图", "pin", () => { togglePin(id); restoreFocus("固定参考图"); });
+    pin.setAttribute("aria-pressed", String(current.pinnedIds.includes(id)));
+    controls.append(up, down, base, pin);
+  }
+  controls.append(action("移除引用", "close", () => removeReference(id)));
+  const preview = el("button", { type: "button", class: "context-image-preview", "aria-label": `查看 ${asset.name}` });
+  preview.append(el("img", { src: asset.url, alt: "", width: 44, height: 44 }));
+  preview.onclick = () => showImage(id);
+  row.append(preview, details, controls);
+  return row;
+}
+function togglePin(id) {
+  if (current.pinnedIds.includes(id)) current.pinnedIds = current.pinnedIds.filter(x => x !== id);
+  else { current.pinnedIds.push(id); retainImage(current, id); }
+  changedContext();
+}
+function moveRef(refs, id, delta) {
+  const order = [...refs], from = order.indexOf(id), to = from + delta;
+  if (from < 0 || to < 0 || to >= order.length) return;
+  order.splice(to, 0, ...order.splice(from, 1));
+  reorderRefs(current, order);
+  renderAttachments(); scheduleQuote(); renderContext();
 }
 function renderContext() {
   $("contextTurns").value = current.contextTurns;
-  const snapshot = contextSnapshot(current);
-  const images = el("div", { class: "context-images" });
-  images.append(...snapshot.imageIds.map(id => {
-    const asset = assets.get(id);
-    const row = el("div", { class: "context-image", "data-asset": id });
-    const details = el("div", { class: "context-image-details" });
-    details.append(el("span", {}, imageRole(id)), el("small", { title: asset.name }, asset.name));
-    const controls = el("div", { class: "context-image-actions" });
-    const restoreFocus = name => $("contextContent").querySelector(`[data-asset="${id}"] [aria-label="${name}"]`)?.focus();
-    const main = action("设为主图", "image", () => {
-      if (current.mainId && current.mainId !== id && !current.attachments.includes(current.mainId)) current.attachments.push(current.mainId);
-      current.mainId = id; changedContext(); restoreFocus("设为主图");
-    });
-    main.setAttribute("aria-pressed", String(current.mainId === id));
-    const pin = action("固定参考图", "pin", () => {
-      if (current.pinnedIds.includes(id)) {
-        current.pinnedIds = current.pinnedIds.filter(x => x !== id);
-        if (current.mainId !== id && !current.attachments.includes(id)) current.attachments.push(id);
-      } else current.pinnedIds.push(id);
-      changedContext(); restoreFocus("固定参考图");
-    });
-    pin.setAttribute("aria-pressed", String(current.pinnedIds.includes(id)));
-    controls.append(main, pin, action("移除引用", "close", () => removeReference(id)));
-    row.append(el("img", { src: asset.url, alt: "", width: 44, height: 44 }), details, controls);
-    return row;
-  }));
-  $("contextContent").replaceChildren(el("p", { class: "dialog-note" }, "历史文字＋选中主图＋参考图，直接用于绘图，不调用额外聊天模型。"),
-    images, el("div", { class: "context-text" }, snapshot.text || "本轮尚未填写要求"));
+  const cap = imageCap(), model = selectedModel();
+  // Show the whole set the user is managing, then mark what the model cannot
+  // take — hiding overflow is what made images vanish without explanation.
+  const full = contextSnapshot(current, current.prompt, Infinity);
+  const snapshot = snapshotFor();
+  const kept = new Set(snapshot.imageIds);
+  const refs = full.refs;
+  const sections = [];
+  const gauge = el("div", { class: "context-gauge" });
+  gauge.append(el("span", { class: "context-gauge-count mono" }, `${snapshot.imageIds.length}/${Number.isFinite(cap) ? cap : "∞"}`),
+    el("span", {}, cap === 1 ? `${model?.name || "本模型"} 每轮只能带 1 张图` : `${model?.name || "本模型"} 每轮最多带 ${cap} 张图（含底图）`));
+  // Overflow is what the capped snapshot cut, not what the uncapped one kept:
+  // reading `full.dropped` here would always be empty and never warn.
+  if (snapshot.dropped.length) gauge.dataset.state = "over";
+  sections.push(gauge);
+  if (full.base) sections.push(el("h3", { class: "context-heading" }, "本轮编辑的底图"),
+    contextRow(full.base, { slot: "base", index: 0, refs }));
+  if (refs.length) {
+    sections.push(el("h3", { class: "context-heading" }, cap === 1 ? "参考图（本模型不带入）" : "附带的参考图"));
+    const list = el("div", { class: "context-images" });
+    list.append(...refs.map((id, i) => contextRow(id, { slot: "ref", index: i, refs, dropped: !kept.has(id) })));
+    sections.push(list);
+  }
+  if (!full.base && !refs.length) sections.push(el("p", { class: "dialog-note" }, "本轮没有带入图片，将按文字直接生成。"));
+  $("contextContent").replaceChildren(el("p", { class: "dialog-note" }, "历史文字＋底图＋参考图，直接用于绘图，不调用额外聊天模型。"),
+    ...sections, el("h3", { class: "context-heading" }, "实际带入的文字"),
+    el("div", { class: "context-text" }, snapshot.text || "本轮尚未填写要求"));
 }
 function previewShape(turn) {
   const options = turn.settings.options;
@@ -245,8 +319,8 @@ function renderTurn(c, turn) {
       actions.append(download, action("继续编辑这张图", "reuse", () => {
         selectSource(current, turn, asset.id); renderAttachments(); scheduleQuote(); $("chatPrompt").focus();
       }), action("添加为参考图", "image", () => {
-        if (!current.attachments.includes(asset.id) && !current.pinnedIds.includes(asset.id)) current.attachments.push(asset.id);
-        changedContext();
+        if (imageCap() === 1) return toast("本模型每轮只能带 1 张图，请改用「继续编辑这张图」");
+        retainImage(current, asset.id); changedContext();
       }), action("重新生成此版本", "retry", () => execute(turn)));
       bottom.append(actions); meta.append(bottom);
       const result = el("div", { class: "chat-result" });
@@ -286,10 +360,12 @@ async function prepare(c, turn) {
   const settings = structuredClone(turn ? turn.settings : c.settings);
   const model = models.find(m => m.id === settings.model);
   if (!model) throw new Error("请选择可用模型");
-  const snapshot = turn ? structuredClone(turn.snapshot) : contextSnapshot(c);
+  // Trimming to the model's ceiling here means switching models degrades the
+  // context instead of blocking the send; the panel shows exactly what is cut.
+  const snapshot = turn ? structuredClone(turn.snapshot) : contextSnapshot(c, c.prompt, model.maxImages);
   const prompt = turn ? turn.prompt : c.prompt.trim();
   if (!prompt) throw new Error("请填写描述或修改要求");
-  if (snapshot.imageIds.length > model.maxImages) throw new Error(`本模型最多带入 ${model.maxImages} 张图片（包含主图）`);
+  if (snapshot.imageIds.length > model.maxImages) throw new Error(`本模型最多带入 ${model.maxImages} 张图片（包含底图）`);
   const images = await assets.encode(snapshot.imageIds);
   const payload = buildChatPayload(model, snapshot.text, settings.options, images);
   return { payload, snapshot, prompt, settings };
@@ -374,11 +450,11 @@ async function upload(files) {
   uploading += 1; syncAction();
   try {
     const model = selectedModel(c); if (!model) throw new Error("请先连接并选择模型");
-    if (imageIds(c).length + files.length > model.maxImages) throw new Error(`本模型最多带入 ${model.maxImages} 张图片（包含主图）`);
+    if (imageIds(c).length + files.length > model.maxImages) throw new Error(`本模型最多带入 ${model.maxImages} 张图片（包含底图）`);
     const added = [];
     for (const file of files) added.push(await assets.add(file, file.name || "粘贴图片"));
     if (!conversations.includes(c)) return;
-    for (const a of added) if (!imageIds(c).includes(a.id)) c.attachments.push(a.id);
+    for (const a of added) attachUpload(c, a.id);
     c.selectionRevision += 1;
   } catch (e) { toast(e.message); }
   finally { uploading -= 1; collectAssets(); renderAttachments(); scheduleQuote(); }
@@ -445,7 +521,11 @@ $("chatModel").onchange = () => {
   const model = models.find(m => m.id === $("chatModel").value);
   const before = current.settings.options;
   current.settings = { model: model.id, options: normalizeOptions(model, before) };
-  persistSettings(); renderOptions(); scheduleQuote();
+  persistSettings(); renderOptions(); renderAttachments(); scheduleQuote();
+  if ($("contextDialog").open) renderContext();
+  // Switching to a narrower model used to look harmless and then fail at send.
+  const cut = contextSnapshot(current, current.prompt, Infinity).imageIds.length - imageIds().length;
+  if (cut > 0) toast(`${model.name} 每轮最多带 ${model.maxImages} 张图，${cut} 张参考图不会带入；可在上下文中调整顺序`);
 };
 $("newConversation").onclick = addConversation;
 $("deleteConversation").onclick = () => {
@@ -475,7 +555,7 @@ $("contextTurns").onchange = () => {
   changedContext();
 };
 $("resetContext").onclick = () => {
-  current.headId = null; current.mainId = null; current.pinnedIds = []; current.attachments = [];
+  current.headId = null; current.mainId = null; current.pinnedIds = []; current.attachments = []; current.keepIds = [];
   changedContext(); collectAssets(); $("contextDialog").close();
 };
 $("quotaButton").onclick = () => { renderQuota(); $("quotaDialog").showModal(); void refreshQuota(); };

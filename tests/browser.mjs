@@ -117,7 +117,23 @@ try {
   assert.equal(await page.locator('#settingsFields select[aria-label="质量"]').inputValue(), "auto");
   await page.locator("#chatModel").selectOption("gemini-3.1-flash-lite-image@local");
   assert.equal(await page.locator('#settingsFields select[aria-label="分辨率"] option').count(), 1);
+  // A one-image model degrades the context and says so, instead of looking fine
+  // and then refusing the send.
+  await page.waitForFunction(() => document.getElementById("chatToast").textContent.includes("最多带 1 张图"));
+  assert.match(await page.locator("#modelNote").innerText(), /每轮只能带 1 张图/);
+  assert.equal(await page.locator("#contextImageCount").innerText(), "1");
+  assert.equal(await page.locator("#contextButton").getAttribute("data-overflow"), "1");
+  await page.locator("#contextButton").click();
+  assert.equal(await page.locator(".context-gauge-count").innerText(), "1/1");
+  assert.equal(await page.locator(".context-gauge").getAttribute("data-state"), "over");
+  // The over-cap image stays listed and marked, never silently dropped.
+  assert.equal(await page.locator('.context-image[data-dropped="true"]').count(), 1);
+  assert.match(await page.locator('.context-image[data-dropped="true"]').innerText(), /超出上限/);
+  await screenshot("desktop-context-single");
+  await page.getByRole("button", { name: "关闭上下文", exact: true }).click();
   await page.locator("#chatModel").selectOption("gpt-image-2@local");
+  assert.equal(await page.locator("#contextButton").getAttribute("data-overflow"), "");
+  assert.equal(await page.locator("#contextImageCount").innerText(), "2");
   // Free-to-paid changes are stopped before the generating POST.
   await page.locator("#chatPrompt").fill("费用变化测试"); await waitReady();
   const beforePaid = mock.state.records.length; mock.state.cost = 7;
@@ -267,13 +283,19 @@ try {
   await spent.waitForFunction(() => document.getElementById("stopButton").hidden);
   await assertStripEmpty();
   assert.equal(await spent.locator(".chat-turn").count(), 1);
-  // The result still chains as the next main image, visible in the context panel.
-  assert.equal(await spent.locator("#contextImageCount").innerText(), "1");
+  // The result chains as the next base image and the upload it was edited from
+  // stays alongside it: two images, one conversation.
+  assert.equal(await spent.locator("#contextImageCount").innerText(), "2");
   await spent.locator("#contextButton").click();
+  assert.equal(await spent.locator(".context-image").count(), 2);
+  assert.equal(await spent.locator('.context-image[data-slot="base"]').count(), 1);
+  assert.match(await spent.locator('.context-image[data-slot="base"] .context-image-role').innerText(), /底图[\s\S]*模型结果/);
+  assert.match(await spent.locator('.context-image[data-slot="ref"] .context-image-role').innerText(), /参考 1[\s\S]*你上传的/);
+  assert.equal(await spent.locator(".context-gauge-count").innerText(), "2/15");
+  // Removing must stick, so the next completed turn may not resurrect it.
+  await spent.getByRole("button", { name: "移除引用", exact: true }).last().click();
   assert.equal(await spent.locator(".context-image").count(), 1);
-  assert.match(await spent.locator(".context-image-details span").first().innerText(), /主图/);
-  await spent.getByRole("button", { name: "移除引用", exact: true }).click();
-  assert.equal(await spent.locator(".context-image").count(), 0);
+  assert.equal(await spent.locator("#contextImageCount").innerText(), "1");
   assert.deepEqual(errors, []);
   console.log(`Browser checks passed. Screenshots: ${screenshots}`);
 } finally {

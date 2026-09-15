@@ -77,7 +77,7 @@ export function buildChatPayload(model, prompt, options, images = []) {
   if (prompt.length > 24_000) throw new Error("上下文过长，请减少带入轮次或新建对话");
   const operation = images.length ? "edit" : "generate";
   if (!model.operations.includes(operation)) throw new Error("模型不支持本次操作");
-  if (images.length > model.maxImages) throw new Error(`本模型最多带入 ${model.maxImages} 张图片（包含主图）`);
+  if (images.length > model.maxImages) throw new Error(`本模型最多带入 ${model.maxImages} 张图片（包含底图）`);
   const image_options = normalizeOptions(model, options);
   if (operation === "edit" && model.family === "gemini") {
     // Studio's edit endpoint uses output_size instead of generation's image_size.
