@@ -60,19 +60,22 @@ try {
   assert.ok(mock.state.records[1].payload.init_image.startsWith("data:image/png;base64,"));
   await page.getByRole("button", { name: "继续编辑这张图", exact: true }).first().click();
   assert.equal(await page.getByText("已选为主图，接着输入修改要求", { exact: true }).count(), 0);
+  // The selected main image belongs to the context panel, not the composer strip.
+  assert.equal(await page.locator(".attachment").count(), 0);
   await page.locator("#imageUpload").setInputFiles({ name: "参考.png", mimeType: "image/png", buffer: png(64, 80) });
-  await page.waitForFunction(() => document.querySelectorAll(".attachment").length === 2);
+  await page.waitForFunction(() => document.querySelectorAll(".attachment").length === 1);
   assert.equal((await page.locator("#attachmentList").innerText()).trim(), "");
-  assert.equal(await page.locator(".attachment-remove").count(), 2);
+  assert.equal(await page.locator(".attachment-remove").count(), 1);
+  assert.equal(await page.locator("#contextImageCount").innerText(), "2");
   await page.locator(".attachment-preview").last().click();
   assert.equal(await page.locator("#imageDialog").isVisible(), true);
   await page.locator("#closeImage").click();
   await screenshot("desktop-attachments");
   await page.locator(".attachment-remove").last().click();
-  assert.equal(await page.locator(".attachment").count(), 1);
+  assert.equal(await page.locator(".attachment").count(), 0);
   assert.equal(await page.locator("#contextImageCount").innerText(), "1");
   await page.locator("#imageUpload").setInputFiles({ name: "参考.png", mimeType: "image/png", buffer: png(64, 80) });
-  await page.waitForFunction(() => document.querySelectorAll(".attachment").length === 2);
+  await page.waitForFunction(() => document.querySelectorAll(".attachment").length === 1);
   await page.locator("#contextButton").click();
   const pin = page.getByRole("button", { name: "固定参考图", exact: true }).last();
   await pin.click(); assert.equal(await pin.getAttribute("aria-pressed"), "true");
@@ -225,41 +228,40 @@ try {
   await dp.waitForFunction(() => !document.getElementById("sendButton").disabled);
   await dp.locator("#sendButton").click();
   await dp.locator(".chat-print").waitFor();
-  // Sending an upload must not clear it before the image request succeeds.
-  const retained = await context.newPage(); retained.on("pageerror", e => errors.push(e.message));
-  await retained.goto(origin + "/chat.html");
-  await retained.waitForFunction(() => document.querySelectorAll("#chatModel option").length === 4);
-  await retained.locator("#imageUpload").setInputFiles({ name: "保留参考.png", mimeType: "image/png", buffer: png(72, 88) });
-  await retained.locator(".attachment").waitFor();
-  const original = await retained.locator(".attachment img").getAttribute("src");
-  const assertInputRetained = async () => {
-    assert.equal(await retained.locator(".attachment").count(), 1);
-    assert.equal(await retained.locator(".attachment img").getAttribute("src"), original);
-  };
+  // Sending consumes the upload: the composer strip empties on send, failure
+  // and cancellation do not return it (it lives in the turn's reference row),
+  // and the model's result never appears in the strip.
+  const spent = await context.newPage(); spent.on("pageerror", e => errors.push(e.message));
+  await spent.goto(origin + "/chat.html");
+  await spent.waitForFunction(() => document.querySelectorAll("#chatModel option").length === 4);
+  await spent.locator("#imageUpload").setInputFiles({ name: "已消耗参考.png", mimeType: "image/png", buffer: png(72, 88) });
+  await spent.locator(".attachment").waitFor();
+  const assertStripEmpty = async () => assert.equal(await spent.locator(".attachment").count(), 0);
   mock.state.failure = true; mock.state.jsonImage = false; mock.state.delay = 1400;
-  await retained.locator("#chatPrompt").fill("测试失败后保留附件");
-  await retained.waitForFunction(() => !document.getElementById("sendButton").disabled);
-  await retained.locator("#sendButton").click();
-  await retained.locator(".chat-pending").waitFor(); await assertInputRetained();
-  await retained.locator(".turn-error").waitFor(); await assertInputRetained();
+  await spent.locator("#chatPrompt").fill("测试发送后附件消耗");
+  await spent.waitForFunction(() => !document.getElementById("sendButton").disabled);
+  await spent.locator("#sendButton").click();
+  await spent.locator(".chat-pending").waitFor(); await assertStripEmpty();
+  assert.equal(await spent.locator(".turn-references img").count(), 1);
+  await spent.locator(".turn-error").waitFor(); await assertStripEmpty();
   mock.state.failure = false;
-  await retained.locator(".turn-error button").click();
-  await retained.locator(".chat-pending").waitFor(); await assertInputRetained();
-  await retained.locator("#stopButton").click();
-  await retained.waitForFunction(() => document.getElementById("stopButton").hidden);
-  await assertInputRetained();
-  mock.state.badImage = true;
-  await retained.locator(".turn-error button").click();
-  await retained.locator(".chat-pending").waitFor();
-  await retained.locator(".turn-error").waitFor(); await assertInputRetained();
-  assert.match(await retained.locator(".turn-error").innerText(), /图片加载失败/);
-  mock.state.badImage = false;
-  await retained.locator(".turn-error button").click();
-  await retained.locator(".chat-print").waitFor();
-  await retained.waitForFunction(() => document.getElementById("stopButton").hidden);
-  assert.equal(await retained.locator(".attachment").count(), 1);
-  assert.notEqual(await retained.locator(".attachment img").getAttribute("src"), original);
-  assert.equal(await retained.locator(".chat-turn").count(), 1);
+  await spent.locator(".turn-error button").click();
+  await spent.locator(".chat-pending").waitFor(); await assertStripEmpty();
+  await spent.locator("#stopButton").click();
+  await spent.waitForFunction(() => document.getElementById("stopButton").hidden);
+  await assertStripEmpty();
+  await spent.locator(".turn-error button").click();
+  await spent.locator(".chat-print").waitFor();
+  await spent.waitForFunction(() => document.getElementById("stopButton").hidden);
+  await assertStripEmpty();
+  assert.equal(await spent.locator(".chat-turn").count(), 1);
+  // The result still chains as the next main image, visible in the context panel.
+  assert.equal(await spent.locator("#contextImageCount").innerText(), "1");
+  await spent.locator("#contextButton").click();
+  assert.equal(await spent.locator(".context-image").count(), 1);
+  assert.match(await spent.locator(".context-image-details span").first().innerText(), /主图/);
+  await spent.getByRole("button", { name: "移除引用", exact: true }).click();
+  assert.equal(await spent.locator(".context-image").count(), 0);
   assert.deepEqual(errors, []);
   console.log(`Browser checks passed. Screenshots: ${screenshots}`);
 } finally {

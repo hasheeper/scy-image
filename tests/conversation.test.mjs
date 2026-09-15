@@ -25,21 +25,23 @@ test("three turns, branching and retries preserve exact text/image context", () 
 test("completion does not override a source selected during generation", () => {
   const c = newConversation(); c.prompt = "hello"; c.attachments = ["original"];
   const { turn, version } = beginTurn(c, contextSnapshot(c), c.prompt, {});
+  assert.deepEqual(c.attachments, []);
   c.selectionRevision++; c.mainId = "manual"; c.attachments.push("new-reference");
   completeVersion(c, turn, version, [{ type: "image", assetId: "result" }], {}, 0);
   assert.equal(c.mainId, "manual");
-  assert.deepEqual(c.attachments, ["original", "new-reference"]);
+  assert.deepEqual(c.attachments, ["new-reference"]);
 });
-test("attachments remain through errors and cancellation, and are consumed only on success", () => {
+test("sending consumes uploads; failure and cancellation do not return them", () => {
   const c = newConversation(); c.prompt = "edit";
   c.attachments = ["uploaded", "pinned"]; c.pinnedIds = ["pinned"];
   const { turn, version } = beginTurn(c, contextSnapshot(c), c.prompt, {});
-  assert.deepEqual(c.attachments, ["uploaded", "pinned"]);
+  assert.deepEqual(turn.snapshot.imageIds, ["pinned", "uploaded"]);
+  assert.deepEqual(c.attachments, []);
   version.status = "error";
   assert.equal(completeVersion(c, turn, version, [{ type: "image", assetId: "unused" }], {}, 0), false);
-  assert.deepEqual(c.attachments, ["uploaded", "pinned"]);
+  assert.deepEqual(c.attachments, []);
   const cancelled = beginVersion(turn); cancelled.status = "cancelled";
-  assert.deepEqual(contextSnapshot(c).imageIds, ["pinned", "uploaded"]);
+  assert.deepEqual(contextSnapshot(c).imageIds, ["pinned"]);
   const retry = beginVersion(turn);
   completeVersion(c, turn, retry, [{ type: "image", assetId: "result" }], { cost: 0 }, 0);
   assert.deepEqual(c.attachments, []);

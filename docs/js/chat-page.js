@@ -122,7 +122,11 @@ function removeReference(id) {
   changedContext(); collectAssets();
 }
 function renderAttachments() {
-  const ids = imageIds();
+  // The strip is a staging area for what the user placed there themselves.
+  // The chain's main image (usually the previous result) still rides along in
+  // the request, but it lives in the context panel — echoing it here made
+  // every success look like the model's output "came back" into the composer.
+  const ids = imageIds().filter(id => id !== current.mainId || current.pinnedIds.includes(id) || current.attachments.includes(id));
   $("attachmentList").replaceChildren(...ids.map(id => {
     const asset = assets.get(id);
     const card = el("div", { class: "attachment" });
@@ -140,9 +144,9 @@ function renderAttachments() {
   }));
   const snapshot = contextSnapshot(current);
   $("contextTurnCount").textContent = snapshot.turnIds.length;
-  $("contextImageCount").textContent = ids.length;
-  $("contextButton").setAttribute("aria-label", `查看上下文：${snapshot.turnIds.length} 轮文字、${ids.length} 张图片`);
-  $("contextButton").title = `上下文：${snapshot.turnIds.length} 轮文字、${ids.length} 张图片`;
+  $("contextImageCount").textContent = snapshot.imageIds.length;
+  $("contextButton").setAttribute("aria-label", `查看上下文：${snapshot.turnIds.length} 轮文字、${snapshot.imageIds.length} 张图片`);
+  $("contextButton").title = `上下文：${snapshot.turnIds.length} 轮文字、${snapshot.imageIds.length} 张图片`;
 }
 function renderContext() {
   $("contextTurns").value = current.contextTurns;
@@ -168,7 +172,7 @@ function renderContext() {
       changedContext(); restoreFocus("固定参考图");
     });
     pin.setAttribute("aria-pressed", String(current.pinnedIds.includes(id)));
-    controls.append(main, pin);
+    controls.append(main, pin, action("移除引用", "close", () => removeReference(id)));
     row.append(el("img", { src: asset.url, alt: "", width: 44, height: 44 }), details, controls);
     return row;
   }));
@@ -241,7 +245,7 @@ function renderTurn(c, turn) {
       actions.append(download, action("继续编辑这张图", "reuse", () => {
         selectSource(current, turn, asset.id); renderAttachments(); scheduleQuote(); $("chatPrompt").focus();
       }), action("添加为参考图", "image", () => {
-        if (!imageIds().includes(asset.id)) current.attachments.push(asset.id);
+        if (!current.attachments.includes(asset.id) && !current.pinnedIds.includes(asset.id)) current.attachments.push(asset.id);
         changedContext();
       }), action("重新生成此版本", "retry", () => execute(turn)));
       bottom.append(actions); meta.append(bottom);

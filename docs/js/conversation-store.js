@@ -28,6 +28,10 @@ export function beginTurn(conversation, snapshot, prompt, settings) {
   const turn = { id: id(), parentId: snapshot.parentId, prompt, settings: structuredClone(settings),
     snapshot: structuredClone(snapshot), selectedVersion: 0, versions: [] };
   conversation.turns.push(turn);
+  // Sending spends the uploads: from here on the turn's reference strip owns
+  // them, so failure or cancellation must not put them back in the composer.
+  const sent = new Set(snapshot.imageIds);
+  conversation.attachments = conversation.attachments.filter(assetId => !sent.has(assetId));
   if (conversation.turns.length === 1) conversation.title = prompt.replace(/\s+/g, " ").slice(0, 36);
   return { turn, version: beginVersion(turn) };
 }
@@ -42,10 +46,6 @@ export function completeVersion(conversation, turn, version, blocks, quote, sele
   if (!blocks.some(b => b.type === "image")) throw new Error("结果没有图片");
   Object.assign(version, { status: "done", blocks, quote });
   if (conversation.selectionRevision === selectionRevision) {
-    // Keep inputs visible until a valid result exists. Consume only references
-    // used by this turn; pinned images and any manually changed draft survive.
-    const sent = new Set(turn.snapshot.imageIds);
-    conversation.attachments = conversation.attachments.filter(assetId => !sent.has(assetId));
     conversation.headId = turn.id;
     conversation.mainId = blocks.find(b => b.type === "image").assetId;
   }
